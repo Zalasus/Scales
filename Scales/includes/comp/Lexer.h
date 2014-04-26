@@ -1,0 +1,123 @@
+
+#ifndef LEXER_H_
+#define LEXER_H_
+
+#include "Nein.h"
+#include <istream>
+#include <vector>
+
+#define CH_LINEFEED 0x0A
+#define I_DECIMAL_POINT '.'
+#define I_STRING_START '"'
+#define I_STRING_END '"'
+#define I_COMMENT_SINGLELINE '#'
+#define I_COMMENT_MULTILINE_CONT '*'
+
+#define ALPHAS String("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_")
+#define NUMBERS String("0123456789")
+
+using std::istream;
+using std::vector;
+
+namespace Scales
+{
+
+
+    enum TokenType
+    {
+    	TT_EOF, //0
+        TT_COMMENT_SINGLELINE, //1
+        TT_COMMENT_MULTILINE, //2
+        TT_KEYWORD, //3
+        TT_IDENT, //4
+        TT_STRING, //5
+        TT_NUMBER, //6
+        TT_OPERATOR //7
+    };
+
+
+    class Token
+    {
+    public:
+
+    	Token();
+
+        Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line);
+
+        TokenType getType();
+
+        String getLexem();
+
+        uint32_t getStartIndex();
+        uint32_t getEndIndex();
+        uint32_t getLine();
+
+        bool is(TokenType type, String lexem);
+        bool is(TokenType type, const char* lexem);
+
+    private:
+
+        TokenType tokenType;
+
+        String tokenLexem;
+
+        uint32_t tokenStart;
+        uint32_t tokenEnd;
+        uint32_t tokenLine;
+    };
+
+
+    class Lexer
+    {
+    public:
+
+        Lexer(istream &in);
+        ~Lexer();
+
+        Token readToken();
+
+        Token peekToken();
+
+        void declareKeyword(String s);
+        void declareOperator(String s);
+
+    private:
+
+        void readNext();
+        Token readNextToken();
+
+        void skipWhites();
+
+        String readIdent();
+        String readNumber();
+        String readStringLiteral();
+
+        bool isKeyword(String s);
+        bool isOperator(String s);
+    	bool isPartOfOperator(String s);
+
+        bool isAlpha(int c);
+        bool isNumeric(int c);
+
+        void lexerError(String message);
+        void lexerError(const char* message);
+
+
+        istream &input;
+
+        int lchar; //Declared as int, as istream does not use stdint, so that int could mean anything, but we want lchar to be the same type as istream.get()
+        Token nextToken;
+
+        bool allowEOF; //Set to true by scanner if an occuring EOF should be counted as an error, like while reading a string literal
+
+        uint32_t currentLine;
+        uint32_t currentIndex;
+
+        vector<String> keywords;
+        vector<String> operators;
+
+    };
+
+}
+
+#endif

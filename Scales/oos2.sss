@@ -1,0 +1,84 @@
+
+#*
+ *
+ *#
+ 
+namespace System;
+
+# This script is declared as static, meaning it's public members can be accessed through it's name everywhere in the ScriptSystem
+# All externalized functions / variables will be accessed in a static context.
+# This script can not be run on a Scriptable.
+static script UpdateManager links UpdateManager
+
+	public native func void requestUpdate(object s, int delayMillis);
+
+end
+
+
+static script Delay links DelayManager
+
+	public native func void delayTicks(int ticks);
+
+	public native func void getSecsPerTick();
+
+	
+	public func void delayMS(int ms)
+	
+		int tickCount = (getSecsPerTick() / (ms*1000)) -> int;  # Autocast to smaller data types is not allowed, so cast to int manually 
+	
+		delayTicks(tickCount);
+	
+	end
+
+end
+
+
+namespace default;
+
+ 
+script WorldObject links WorldObject  # The WorldObject after "links" has nothing to do with the scriptname. It is a class registered for script reflection
+
+
+	# An event is a special type of function that may only be invoked by the underlying implementation
+	# The declaration is weak, meaning if the implementation tries to invoke an undefined or abstract event(like declared here), nothing will happen. No errors and shit.
+	public external event activate(object sender); # No access modifier except public allowed; events are always public anyway
+	
+	public native funct disable(); # All modifiers must be stated BEFORE function keyword/data type. I think this is obvious but now you know for sure.
+	
+	public native funct isDisabled();
+	
+	
+	public funct isEnabled() # Note: Such a function is completely idiotic and shall not be considered as good practice. It serves only demonstration purposes. Same goes for comments wider than the screen.
+	
+		return !isDisabled();
+	
+	end
+
+
+end
+ 
+
+script SimpleDoor extends WorldObject uses System:Delay
+
+	universal int justSomeRandomInt = 847;
+	
+
+	event activate(object sender) # overridden keyword is just there for enforced readability. omitting it would yield an error
+	
+			if(isEnabled())
+			
+				System:Delay.delayMS(100);
+			
+				disable();
+				
+			else
+			
+				enable();
+			
+			end
+	
+	end
+	
+
+end
+

@@ -1,0 +1,87 @@
+
++=======================+
+|  The Scales language  |
+|     specification     |
+|        V. 1.0         |
+|  (C) KniftoSoft 2014  |
++=======================+
+
+
+
+Contents
+========
+
+    1 - Changelog
+    2 - Foreword
+    3 - Paradigms
+    3 - Data types
+
+
+
+1 - Changelog
+=============
+
+29.03.2014  1.0     First specification
+
+
+
+2 - Foreword
+============
+
+    This is the specification of the Scales scripting language.
+
+    Scales is the official scripting language for the NRPG3 game engine. It is
+    also designed to be easily integrated into other applications.
+
+
+
+3 - Design paradigms
+====================
+
+    Scales was designed to do basic tasks on script-layer as also to be able to
+    delegate them to the underlaying implementation.
+
+    As performance is one of the most important features of the Scales language,
+    it is designed to be compiled during runtime rather than to be interpreted.
+
+
+
+4 - Programming paradigms
+=========================
+
+    -Imperative
+    -Structured
+    -Object-oriented
+
+
+
+5 - Type system
+===============
+
+    -Weak
+    -Static
+    -Explicit
+
+
+6 - Data types
+==========================
+
+    Scales knows the following data types:
+
+        int     -   32 bit signed integer
+        long    -   64 bit signed integer
+        float   -   32 bit IEEE 754 float representation with unified NaN
+        double  -   64 bit IEEE 754 float representation with unified NaN
+        string  -   byte array with a max. length of 2^32 - 1
+        object  -   container for primitives and objects
+
+
+
+
+
+
+
+
+
+
+
