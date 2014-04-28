@@ -6,38 +6,67 @@
 
 #include "Nein.h"
 
+#include "DataType.h"
 #include "Compiler.h"
 #include "ScriptSystem.h"
 #include "Lexer.h"
+#include "Exception.h"
 
 using std::istream;
 
 namespace Scales
 {
 
+	class ExpressionInfo
+    {
+
+    public:
+
+    	ExpressionInfo(DataType t, bool cons);
+
+    	bool isConstant();
+
+    	DataType getType();
+
+
+    private:
+
+    	DataType type;
+
+    	bool constant;
+
+    };
+
+
     class Compiler
     {
     public:
 
-        Compiler();
+        Compiler(istream &in);
 
-        char *compile(istream in);
+        ~Compiler();
+
+        void compile();
 
     private:
 
         Lexer *lexer;
         PrototypeScriptSystem scriptSystem;
 
-        DataType expression();
-        DataType relationalExpression();
-        DataType arithmeticExpression();
-        DataType term();
-        DataType signedFactor();
-        DataType castFactor();
-        DataType memberFactor();
-        DataType factor();
+        vector<String> keywords;
+        vector<String> datatypes;
+        vector<String> operators;
 
-        DataType functionCall(Token ident, bool member);
+        ExpressionInfo expression();
+        ExpressionInfo relationalExpression();
+        ExpressionInfo arithmeticExpression();
+        ExpressionInfo term();
+        ExpressionInfo castFactor();
+        ExpressionInfo signedFactor();
+        ExpressionInfo memberFactor();
+        ExpressionInfo factor();
+
+        ExpressionInfo functionCall(Token ident, bool member);
 
         DataType getTypeOfNumberString(String numberString);
 

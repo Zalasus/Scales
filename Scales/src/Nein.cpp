@@ -6,6 +6,7 @@
  */
 
 #include "Nein.h"
+#include <cstdio>
 
 namespace Scales
 {
@@ -413,6 +414,28 @@ namespace Scales
 		newData[0] = left;
 
 		return String(newData, right.length() + 1);
+	}
+
+	String operator+(String left, int right)
+	{
+		//TODO: Make this more efficient. sprintf is not really known as a performance-monster
+
+		char *newData = new char[16]; //11 chars are needed for longest string representation of 32 bit int; 5 chars reserve
+
+		sprintf(newData, "%d", right);
+
+		return left.concat(String(newData));
+	}
+
+	String operator+(int left, String right)
+	{
+		//TODO: Make this more efficient. sprintf is not really known as a performance-monster
+
+		char newData[16]; //11 chars are needed for longest string representation of 32 bit int; 5 chars reserve
+
+		sprintf(newData, "%d", left);
+
+		return String(newData).concat(right);
 	}
 
 }

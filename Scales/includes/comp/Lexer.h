@@ -22,49 +22,49 @@ using std::vector;
 namespace Scales
 {
 
+	enum TokenType
+	{
+		TT_EOF, //0
+		TT_COMMENT_SINGLELINE, //1
+		TT_COMMENT_MULTILINE, //2
+		TT_KEYWORD, //3
+		TT_IDENT, //4
+		TT_STRING, //5
+		TT_NUMBER, //6
+		TT_OPERATOR //7
+	};
 
-    enum TokenType
-    {
-    	TT_EOF, //0
-        TT_COMMENT_SINGLELINE, //1
-        TT_COMMENT_MULTILINE, //2
-        TT_KEYWORD, //3
-        TT_IDENT, //4
-        TT_STRING, //5
-        TT_NUMBER, //6
-        TT_OPERATOR //7
-    };
 
+	class Token
+	{
+	public:
 
-    class Token
-    {
-    public:
+		Token();
 
-    	Token();
+		Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line);
 
-        Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line);
+		TokenType getType();
 
-        TokenType getType();
+		String getLexem();
 
-        String getLexem();
+		uint32_t getStartIndex();
+		uint32_t getEndIndex();
+		uint32_t getLine();
 
-        uint32_t getStartIndex();
-        uint32_t getEndIndex();
-        uint32_t getLine();
+		bool is(TokenType type, String lexem);
+		bool is(TokenType type, const char* lexem);
 
-        bool is(TokenType type, String lexem);
-        bool is(TokenType type, const char* lexem);
+	private:
 
-    private:
+		TokenType tokenType;
 
-        TokenType tokenType;
+		String tokenLexem;
 
-        String tokenLexem;
+		uint32_t tokenStart;
+		uint32_t tokenEnd;
+		uint32_t tokenLine;
+	};
 
-        uint32_t tokenStart;
-        uint32_t tokenEnd;
-        uint32_t tokenLine;
-    };
 
 
     class Lexer
@@ -81,10 +81,13 @@ namespace Scales
         void declareKeyword(String s);
         void declareOperator(String s);
 
+        void setIgnoreComments(bool ic);
+
     private:
 
         void readNext();
         Token readNextToken();
+        Token internalTokenRead();
 
         void skipWhites();
 
@@ -109,6 +112,7 @@ namespace Scales
         Token nextToken;
 
         bool allowEOF; //Set to true by scanner if an occuring EOF should be counted as an error, like while reading a string literal
+        bool ignoreComments;
 
         uint32_t currentLine;
         uint32_t currentIndex;

@@ -7,58 +7,7 @@
 namespace Scales
 {
 
-	Token::Token()
-	{
-		tokenType = TT_EOF;
-		tokenLexem = String("");
-		tokenStart = 0;
-		tokenEnd = 0;
-		tokenLine = 0;
-	}
-
-	Token::Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line)
-	{
-		tokenType = type;
-		tokenLexem = lexem;
-		tokenStart = startIndex;
-		tokenEnd = endIndex;
-		tokenLine = line;
-	}
-
-	TokenType Token::getType()
-	{
-		return tokenType;
-	}
-
-	String Token::getLexem()
-	{
-		return tokenLexem;
-	}
-
-	uint32_t Token::getStartIndex()
-	{
-		return tokenStart;
-	}
-
-	uint32_t Token::getEndIndex()
-	{
-		return tokenEnd;
-	}
-
-	uint32_t Token::getLine()
-	{
-		return tokenLine;
-	}
-
-	bool Token::is(TokenType type, String lexem)
-	{
-		return (tokenType == type && tokenLexem.equals(lexem));
-	}
-
-	bool Token::is(TokenType type, const char *lexem)
-	{
-		return is(type, String(lexem));
-	}
+	//public class lexer
 
     Lexer::Lexer(istream &in) : input(in)
     {
@@ -69,7 +18,7 @@ namespace Scales
 
         allowEOF = true;
 
-        lchar = input.get();
+        readNext();
 
         keywords = vector<String>();
         operators = vector<String>();
@@ -116,9 +65,26 @@ namespace Scales
 		operators.push_back(s);
 	}
 
+    void Lexer::setIgnoreComments(bool ic)
+    {
+    	ignoreComments = ic;
+    }
+
     //private
 
     Token Lexer::readNextToken()
+    {
+    	Token t = internalTokenRead();
+
+    	while(ignoreComments && (t.getType() == TT_COMMENT_SINGLELINE || t.getType() == TT_COMMENT_MULTILINE))
+    	{
+    		t = internalTokenRead();
+    	}
+
+    	return t;
+    }
+
+    Token Lexer::internalTokenRead()
     {
     	allowEOF = true;
 
@@ -171,9 +137,7 @@ namespace Scales
 			{
 				if(multiline)
 				{
-					//TODO: Strange way to do that. Better review it later
-					String end = String("");
-					end += I_COMMENT_MULTILINE_CONT;
+					String end = String("") + I_COMMENT_MULTILINE_CONT;
 
 					if(lchar == I_COMMENT_SINGLELINE && s.endsWith(end))
 					{
@@ -194,7 +158,16 @@ namespace Scales
 				readNext();
 			}
 
-			return Token(multiline ? TT_COMMENT_MULTILINE : TT_COMMENT_SINGLELINE, s, startIndex, currentIndex, startLine);
+			if(multiline)
+			{
+				//If multiline, cut away multiline indicators (check if there really is one at the end; comment might be closed by EOF, too)
+
+				return Token(TT_COMMENT_MULTILINE, s.substring(1,s.endsWith("*") ? s.length()-1 : s.length()), startIndex, currentIndex, startLine);
+
+			}else
+			{
+				return Token(TT_COMMENT_SINGLELINE, s, startIndex, currentIndex, startLine);
+			}
 
 		}else if(isPartOfOperator(String("") + (char)lchar))
 		{
@@ -265,7 +238,7 @@ namespace Scales
 	{
 		readNext();
 		String s = "";
-		while(lchar != I_STRING_END || lchar != EOF)
+		while(lchar != I_STRING_END && lchar != EOF)
 		{
 			if(lchar == '\\')
 			{
@@ -369,4 +342,61 @@ namespace Scales
     {
     	lexerError(String(msg));
     }
+
+
+
+    //private class token
+
+    Token::Token()
+	{
+		tokenType = TT_EOF;
+		tokenLexem = String("");
+		tokenStart = 0;
+		tokenEnd = 0;
+		tokenLine = 0;
+	}
+
+	Token::Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line)
+	{
+		tokenType = type;
+		tokenLexem = lexem;
+		tokenStart = startIndex;
+		tokenEnd = endIndex;
+		tokenLine = line;
+	}
+
+	TokenType Token::getType()
+	{
+		return tokenType;
+	}
+
+	String Token::getLexem()
+	{
+		return tokenLexem;
+	}
+
+	uint32_t Token::getStartIndex()
+	{
+		return tokenStart;
+	}
+
+	uint32_t Token::getEndIndex()
+	{
+		return tokenEnd;
+	}
+
+	uint32_t Token::getLine()
+	{
+		return tokenLine;
+	}
+
+	bool Token::is(TokenType type, String lexem)
+	{
+		return (tokenType == type && tokenLexem.equals(lexem));
+	}
+
+	bool Token::is(TokenType type, const char *lexem)
+	{
+		return is(type, String(lexem));
+	}
 }

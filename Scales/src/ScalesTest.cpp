@@ -9,41 +9,32 @@
 #include <fstream>
 
 #include "comp/Lexer.h"
+#include "comp/Compiler.h"
+#include "DataType.h"
+#include "comp/Exception.h"
 
 using namespace Scales;
 
 int main()
 {
 
-	std::ifstream in("C:/test.sss", std::ios::in);
+	std::ifstream in("oos3.sss", std::ios::in);
 
 	if(in.is_open())
 	{
-		Lexer *l = new Lexer(in);
 
-		l->declareKeyword(String("public"));
-		l->declareKeyword(String("native"));
-		l->declareKeyword(String("func"));
-		l->declareKeyword(String("int"));
-		l->declareKeyword(String("end"));
-		l->declareKeyword(String("if"));
-		l->declareOperator(String("("));
-		l->declareOperator(String(")"));
-		l->declareOperator(String("="));
-		l->declareOperator(String("=="));
-		l->declareOperator(String("+"));
-		l->declareOperator(String(";"));
-		l->declareOperator(String("."));
+		Compiler *c = new Compiler(in);
 
-		Token t = l->readToken();
-		while(t.getType() != TT_EOF)
+		try
 		{
-			std::cout << t.getType() << "\t" << t.getLexem() << std::endl;
+			c->compile();
 
-			t = l->readToken();
+		}catch(Exception &e)
+		{
+			std::cout << e.getMessage() << std::endl;
 		}
 
-		delete l;
+		delete c;
 
 	}
 
