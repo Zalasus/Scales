@@ -33,10 +33,10 @@ namespace Scales
 
 		String(uint8_t *s, int32_t newLength);
 
-		bool equals(String s) const;
+		bool equals(const String &s) const;
 
-		bool endsWith(String ending) const;
-		bool startsWith(String begin) const;
+		bool endsWith(const String &ending) const;
+		bool startsWith(const String &begin) const;
 		bool isEmpty() const;
 
 		String toUpperCase() const;
@@ -49,19 +49,20 @@ namespace Scales
 
 		int32_t indexOf(uint8_t c) const;
 		int32_t indexOf(uint8_t c, int32_t startIndex) const;
-		int32_t indexOf(String s) const;
-		int32_t indexOf(String s, int32_t startIndex) const;
+		int32_t indexOf(const String &s) const;
+		int32_t indexOf(const String &s, int32_t startIndex) const;
 
-		String concat(String s) const;
+		String concat(const String &s) const;
 
 		String substring(int32_t start) const;
 		String substring(int32_t start, int32_t end) const;
 
-		String operator=(String s);
+		String operator=(const String &s);
 
-		String operator+=(String s);
+		String operator+=(const String &s);
 		String operator+=(const char *s);
 		String operator+=(char c);
+		String operator+=(int i);
 
 		/*String operator+(String &left, String &right);
 
@@ -80,17 +81,39 @@ namespace Scales
 
 	std::ostream& operator<<(std::ostream &out, const String &s);
 
-	String operator+(String left, String right);
+	String operator+(const String &left, const String &right);
 
-	String operator+(String left, const char *right);
-	String operator+(const char *left, String right);
+	String operator+(const String &left, const char *right);
+	String operator+(const char *left, const String &right);
 
-	String operator+(String left, char right);
-	String operator+(char left, String right);
+	String operator+(const String &left, char right);
+	String operator+(char left, const String &right);
 
-	String operator+(String left, int right);
-	String operator+(int left, String right);
+	String operator+(const String &left, int right);
+	String operator+(int left, const String &right);
 
+
+	class ByteArrayOutputStream
+	{
+	public:
+		ByteArrayOutputStream();
+		~ByteArrayOutputStream();
+
+		void write(uint8_t c);
+
+		uint32_t size();
+
+		void reset();
+
+		uint8_t *copyBuffer();
+		uint8_t *getBuffer();
+
+	private:
+		uint8_t *buffer;
+		uint32_t length;
+		uint32_t count;
+
+	};
 }
 
 

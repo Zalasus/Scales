@@ -22,7 +22,7 @@ using std::vector;
 namespace Scales
 {
 
-	enum TokenType
+	/*enum TokenType
 	{
 		TT_EOF, //0
 		TT_COMMENT_SINGLELINE, //1
@@ -32,27 +32,39 @@ namespace Scales
 		TT_STRING, //5
 		TT_NUMBER, //6
 		TT_OPERATOR //7
-	};
+	};*/
 
 
 	class Token
 	{
 	public:
 
+		enum TokenType
+		{
+			TT_EOF, //0
+			TT_COMMENT_SINGLELINE, //1
+			TT_COMMENT_MULTILINE, //2
+			TT_KEYWORD, //3
+			TT_IDENT, //4
+			TT_STRING, //5
+			TT_NUMBER, //6
+			TT_OPERATOR //7
+		};
+
 		Token();
 
-		Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line);
+		Token(TokenType type, const String &lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line);
 
-		TokenType getType();
+		TokenType getType() const;
 
-		String getLexem();
+		String getLexem() const;
 
-		uint32_t getStartIndex();
-		uint32_t getEndIndex();
-		uint32_t getLine();
+		uint32_t getStartIndex() const;
+		uint32_t getEndIndex() const;
+		uint32_t getLine() const;
 
-		bool is(TokenType type, String lexem);
-		bool is(TokenType type, const char* lexem);
+		bool is(TokenType type, const String &lexem) const;
+		bool is(TokenType type, const char* lexem) const;
 
 	private:
 
@@ -78,10 +90,12 @@ namespace Scales
 
         Token peekToken();
 
-        void declareKeyword(String s);
-        void declareOperator(String s);
+        void declareKeyword(const String &s);
+        void declareOperator(const String &s);
 
         void setIgnoreComments(bool ic);
+
+        uint32_t getCurrentLine();
 
     private:
 
@@ -95,14 +109,14 @@ namespace Scales
         String readNumber();
         String readStringLiteral();
 
-        bool isKeyword(String s);
-        bool isOperator(String s);
-    	bool isPartOfOperator(String s);
+        bool isKeyword(const String &s);
+        bool isOperator(const String &s);
+    	bool isPartOfOperator(const String &s);
 
         bool isAlpha(int c);
         bool isNumeric(int c);
 
-        void lexerError(String message);
+        void lexerError(const String &message);
         void lexerError(const char* message);
 
 

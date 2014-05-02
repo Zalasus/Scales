@@ -33,7 +33,7 @@ namespace Scales
 
     Token Lexer::readToken()
     {
-    	if(nextToken.getType() == TT_EOF)
+    	if(nextToken.getType() == Token::TT_EOF)
     	{
     		nextToken = readNextToken();
     	}
@@ -47,7 +47,7 @@ namespace Scales
 
     Token Lexer::peekToken()
     {
-        if(nextToken.getType() == TT_EOF)
+        if(nextToken.getType() == Token::TT_EOF)
         {
         	nextToken = readNextToken();
         }
@@ -55,12 +55,12 @@ namespace Scales
         return nextToken;
     }
 
-    void Lexer::declareKeyword(String s)
+    void Lexer::declareKeyword(const String &s)
     {
     	keywords.push_back(s);
     }
 
-    void Lexer::declareOperator(String s)
+    void Lexer::declareOperator(const String &s)
 	{
 		operators.push_back(s);
 	}
@@ -70,13 +70,18 @@ namespace Scales
     	ignoreComments = ic;
     }
 
+    uint32_t Lexer::getCurrentLine()
+    {
+    	return currentLine;
+    }
+
     //private
 
     Token Lexer::readNextToken()
     {
     	Token t = internalTokenRead();
 
-    	while(ignoreComments && (t.getType() == TT_COMMENT_SINGLELINE || t.getType() == TT_COMMENT_MULTILINE))
+    	while(ignoreComments && (t.getType() == Token::TT_COMMENT_SINGLELINE || t.getType() == Token::TT_COMMENT_MULTILINE))
     	{
     		t = internalTokenRead();
     	}
@@ -92,7 +97,7 @@ namespace Scales
 
     	if(lchar == EOF)
     	{
-    		return Token(TT_EOF, "", currentIndex, currentIndex, currentLine);
+    		return Token(Token::TT_EOF, "", currentIndex, currentIndex, currentLine);
     	}
 
     	int startLine = currentLine;
@@ -104,22 +109,22 @@ namespace Scales
 
     		if(isKeyword(s))
     		{
-    			return Token(TT_KEYWORD, s, startIndex, currentIndex, startLine);
+    			return Token(Token::TT_KEYWORD, s, startIndex, currentIndex, startLine);
     		}else
     		{
-    			return Token(TT_IDENT, s, startIndex, currentIndex, startLine);
+    			return Token(Token::TT_IDENT, s, startIndex, currentIndex, startLine);
     		}
     	}else if(isNumeric(lchar))
 		{
 			String s = readNumber();
 
-			return Token(TT_NUMBER, s, startIndex, currentIndex, startLine);
+			return Token(Token::TT_NUMBER, s, startIndex, currentIndex, startLine);
 
 		}else if(lchar == I_STRING_START)
 		{
 			String s = readStringLiteral();
 
-			return Token(TT_STRING, s, startIndex, currentIndex, startLine);
+			return Token(Token::TT_STRING, s, startIndex, currentIndex, startLine);
 
 		}else if(lchar == I_COMMENT_SINGLELINE)
 		{
@@ -162,11 +167,11 @@ namespace Scales
 			{
 				//If multiline, cut away multiline indicators (check if there really is one at the end; comment might be closed by EOF, too)
 
-				return Token(TT_COMMENT_MULTILINE, s.substring(1,s.endsWith("*") ? s.length()-1 : s.length()), startIndex, currentIndex, startLine);
+				return Token(Token::TT_COMMENT_MULTILINE, s.substring(1,s.endsWith("*") ? s.length()-1 : s.length()), startIndex, currentIndex, startLine);
 
 			}else
 			{
-				return Token(TT_COMMENT_SINGLELINE, s, startIndex, currentIndex, startLine);
+				return Token(Token::TT_COMMENT_SINGLELINE, s, startIndex, currentIndex, startLine);
 			}
 
 		}else if(isPartOfOperator(String("") + (char)lchar))
@@ -186,13 +191,13 @@ namespace Scales
 				lexerError("Lexer: Unexpected character in operator");
 			}
 
-			return Token(TT_OPERATOR, s, startIndex, currentIndex, startLine);
+			return Token(Token::TT_OPERATOR, s, startIndex, currentIndex, startLine);
 		}else
 		{
 			lexerError("Unexpected character");
 		}
 
-    	return Token(TT_EOF, "", currentIndex, currentIndex, currentLine);
+    	return Token(Token::TT_EOF, "", currentIndex, currentIndex, currentLine);
     }
 
 
@@ -282,7 +287,7 @@ namespace Scales
 		currentIndex++;
 	}
 
-    bool Lexer::isKeyword(String s)
+    bool Lexer::isKeyword(const String &s)
     {
     	for(uint32_t i = 0; i < keywords.size() ; i++)
     	{
@@ -295,7 +300,7 @@ namespace Scales
     	return false;
     }
 
-    bool Lexer::isOperator(String s)
+    bool Lexer::isOperator(const String &s)
 	{
     	for(uint32_t i = 0; i < operators.size() ; i++)
 		{
@@ -308,7 +313,7 @@ namespace Scales
 		return false;
 	}
 
-    bool Lexer::isPartOfOperator(String op)
+    bool Lexer::isPartOfOperator(const String &op)
 	{
     	for(uint32_t i = 0; i < operators.size(); i++)
     	{
@@ -333,7 +338,7 @@ namespace Scales
     	return NUMBERS.indexOf((char)c) != -1;
     }
 
-    void Lexer::lexerError(String msg)
+    void Lexer::lexerError(const String &msg)
     {
     	throw msg;
     }
@@ -349,14 +354,14 @@ namespace Scales
 
     Token::Token()
 	{
-		tokenType = TT_EOF;
+		tokenType = Token::TT_EOF;
 		tokenLexem = String("");
 		tokenStart = 0;
 		tokenEnd = 0;
 		tokenLine = 0;
 	}
 
-	Token::Token(TokenType type, String lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line)
+	Token::Token(Token::TokenType type, const String &lexem, uint32_t startIndex, uint32_t endIndex, uint32_t line)
 	{
 		tokenType = type;
 		tokenLexem = lexem;
@@ -365,37 +370,37 @@ namespace Scales
 		tokenLine = line;
 	}
 
-	TokenType Token::getType()
+	Token::TokenType Token::getType() const
 	{
 		return tokenType;
 	}
 
-	String Token::getLexem()
+	String Token::getLexem() const
 	{
 		return tokenLexem;
 	}
 
-	uint32_t Token::getStartIndex()
+	uint32_t Token::getStartIndex() const
 	{
 		return tokenStart;
 	}
 
-	uint32_t Token::getEndIndex()
+	uint32_t Token::getEndIndex() const
 	{
 		return tokenEnd;
 	}
 
-	uint32_t Token::getLine()
+	uint32_t Token::getLine() const
 	{
 		return tokenLine;
 	}
 
-	bool Token::is(TokenType type, String lexem)
+	bool Token::is(Token::TokenType type, const String &lexem) const
 	{
 		return (tokenType == type && tokenLexem.equals(lexem));
 	}
 
-	bool Token::is(TokenType type, const char *lexem)
+	bool Token::is(Token::TokenType type, const char *lexem) const
 	{
 		return is(type, String(lexem));
 	}

@@ -1,3 +1,29 @@
 
 
-foo("asdf", stopShooting, "hey, it's me!") + "hello";
+
+namespace System;
+
+
+script Actor
+
+	int health = 100;
+
+	func int getHealth()
+	
+		return health;
+	
+	end
+
+end
+
+
+
+static script asdf
+
+	
+	object<Actor> o;
+	
+	int i = o.getHealth();
+	
+
+end

@@ -32,24 +32,62 @@ namespace Scales
         String getTypeName() const;
 
         bool isNumeric() const;
-        bool equals(DataType t) const;
+        bool equals(const DataType &t) const;
 
-        static DataType mathCast(DataType a, DataType b);
-        static DataType byName(String s);
+        bool canCastImplicitlyTo(const DataType &t);
+
+        void initSpecifier(const String &s);
+        String getSpecifier() const;
+
+        String toString() const;
+
+        static DataType mathCast(const DataType &a, const DataType &b);
+        static DataType byName(const String &s);
         static DataType byID(uint8_t id);
 
     private:
 
-        DataType(uint8_t id, String name);
-
+        DataType(uint8_t id, const String &name);
 
         uint8_t typeID;
         String typeName;
 
-        static String test;
+        String specifier;
 
         static vector<DataType> values;
 
+    };
+
+
+    class AccessType
+    {
+
+    public:
+
+        	static const AccessType PRIVATE;
+        	static const AccessType PUBLIC;
+        	static const AccessType UNIVERSAL;
+
+        	AccessType(const AccessType &t);
+
+        	AccessType &operator=(const AccessType &t);
+
+            uint8_t getTypeID() const;
+            String getTypeName() const;
+
+            bool equals(const AccessType &t) const;
+
+            static AccessType byName(const String &s);
+            static AccessType byID(uint8_t id);
+
+        private:
+
+            AccessType(uint8_t id, const String &name);
+
+            uint8_t typeID;
+            String typeName;
+
+            static vector<AccessType> values;
     };
 
 }

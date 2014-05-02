@@ -7,7 +7,7 @@ namespace System;
 
 # This script is declared as static, meaning it's public members can be accessed through it's name everywhere in the ScriptSystem
 # All externalized functions / variables will be accessed in a static context.
-# This script can not be run on a Scriptable.
+# This script can not be attached to a Scriptable.
 static script UpdateManager links UpdateManager
 
 	public native func void requestUpdate(object s, int delayMillis);
@@ -19,7 +19,7 @@ static script Delay links DelayManager
 
 	public native func void delayTicks(int ticks);
 
-	public native func void getSecsPerTick();
+	public native func float getSecsPerTick();
 
 	
 	public func void delayMS(int ms)
@@ -38,17 +38,20 @@ namespace default;
  
 script WorldObject links WorldObject  # The WorldObject after "links" has nothing to do with the scriptname. It is a class registered for script reflection
 
+	# This script provides basic native methods, so new scripts can simply extend this script for access to these instead of
+	# linking the class and defining native methods all over again 
+	
 
 	# An event is a special type of function that may only be invoked by the underlying implementation
 	# The declaration is weak, meaning if the implementation tries to invoke an undefined or abstract event(like declared here), nothing will happen. No errors and shit.
 	public external event activate(object sender); # No access modifier except public allowed; events are always public anyway
 	
-	public native funct disable(); # All modifiers must be stated BEFORE function keyword/data type. I think this is obvious but now you know for sure.
+	public native func void disable(); # All modifiers must be stated BEFORE function keyword/data type. I think this is obvious but now you know for sure.
 	
-	public native funct isDisabled();
+	public native func int isDisabled();
 	
 	
-	public funct isEnabled() # Note: Such a function is completely idiotic and shall not be considered as good practice. It serves only demonstration purposes. Same goes for comments wider than the screen.
+	public func int isEnabled() # Note: Such a function is completely idiotic and shall not be considered as good practice. It serves only demonstration purposes. Same goes for comments wider than the screen.
 	
 		return !isDisabled();
 	
@@ -76,6 +79,74 @@ script SimpleDoor extends WorldObject uses System:Delay
 				enable();
 			
 			end
+	
+	end
+
+end
+
+
+namepspace System;
+
+script Weapon links EntityWeapon
+
+
+end
+
+script Actor links EntityActor
+
+end
+
+script Player links EntityPlayer
+
+	public native object<Weapon> getEquippedWeapon(); 
+
+end
+
+script Activator links Activator
+
+	native event onActivate(object<Actor> actor);
+
+end
+
+script Spell links Spell
+
+	native event onCast(object<Actor> caster);
+	
+	native event onEffectStart(object<Actor> caster, object<Actor> target);
+	
+	native event onEffectEnd(object<Actor> caster, object<Actor> target);
+
+end
+
+static script Game links GameManager
+
+	public native object<Player> getPlayer();	
+
+end
+
+
+
+namespace default;
+
+
+script RepairSpell uses System extends Spell
+
+	#*
+	 * Spell that repairs the currently equipped weapon 
+	 *#
+
+	event onEffectStart(object<Actor> caster, object<Actor> target)
+	
+		object<Player> player = target -> object<Player>; # If target can not be cast into object<Player>, player will be null
+	
+		if(player != null)
+		
+			object<Weapon> playerWeapon = player.getEquippedWeapon();
+	
+			playerWeapon.
+	
+		end
+		
 	
 	end
 	

@@ -98,12 +98,12 @@ namespace Scales
 		return -1;
 	}
 
-	int32_t String::indexOf(String s) const
+	int32_t String::indexOf(const String &s) const
 	{
 		return indexOf(s, 0);
 	}
 
-	int32_t String::indexOf(String s, int32_t startIndex) const
+	int32_t String::indexOf(const String &s, int32_t startIndex) const
 	{
 		if((s.length() + startIndex) > len || s.isEmpty())
 		{
@@ -132,7 +132,7 @@ namespace Scales
 		return -1;
 	}
 
-	bool String::equals(String s) const
+	bool String::equals(const String &s) const
 	{
 		if(s.length() != len)
 		{
@@ -150,7 +150,7 @@ namespace Scales
 		return true;
 	}
 
-	bool String::endsWith(String ending) const
+	bool String::endsWith(const String &ending) const
 	{
 		if(ending.length() > len || ending.isEmpty() || isEmpty())
 		{
@@ -168,7 +168,7 @@ namespace Scales
 		return true;
 	}
 
-	bool String::startsWith(String start) const
+	bool String::startsWith(const String &start) const
 	{
 		if(start.length() > len || start.isEmpty() || isEmpty())
 		{
@@ -231,7 +231,7 @@ namespace Scales
 		return String(newData, len);
 	}
 
-	String String::concat(String s) const
+	String String::concat(const String &s) const
 	{
 		int32_t newLen = len + s.length();
 		uint8_t *newData = new uint8_t[newLen];
@@ -269,7 +269,7 @@ namespace Scales
 	}
 
 
-	String String::operator=(String s)
+	String String::operator=(const String &s)
 	{
 		delete[] data;
 
@@ -284,7 +284,7 @@ namespace Scales
 		return *this;
 	}
 
-	String String::operator+=(String s)
+	String String::operator+=(const String &s)
 	{
 		int32_t newLen = len + s.length();
 		uint8_t *newData = new uint8_t[newLen];
@@ -359,6 +359,16 @@ namespace Scales
 		return *this;
 	}
 
+	String String::operator+=(int i)
+	{
+		//TODO: Make this more efficient. sprintf is not really known as a performance-monster
+
+		char newData[16]; //11 chars are needed for longest string representation of 32 bit int; 5 chars reserve
+
+		sprintf(newData, "%d", i);
+
+		return concat(String(newData));
+	}
 
 	std::ostream& operator<<(std::ostream &out, const String &s)
 	{
@@ -371,26 +381,26 @@ namespace Scales
 		return out;
 	}
 
-	String operator+(String left, String right)
+	String operator+(const String &left, const String &right)
 	{
 		return left.concat(right);
 	}
 
-	String operator+(String left, const char *right)
+	String operator+(const String &left, const char *right)
 	{
 		String s = String(right);
 
 		return left.concat(s);
 	}
 
-	String operator+(const char *left, String right)
+	String operator+(const char *left, const String &right)
 	{
 		String s = String(left);
 
 		return s.concat(right);
 	}
 
-	String operator+(String left, char right)
+	String operator+(const String &left, char right)
 	{
 		uint8_t *newData = new uint8_t[left.length() + 1];
 
@@ -403,7 +413,7 @@ namespace Scales
 		return String(newData, left.length() + 1);
 	}
 
-	String operator+(char left, String right)
+	String operator+(char left, const String &right)
 	{
 		uint8_t *newData = new uint8_t[right.length() + 1];
 
@@ -416,7 +426,7 @@ namespace Scales
 		return String(newData, right.length() + 1);
 	}
 
-	String operator+(String left, int right)
+	String operator+(const String &left, int right)
 	{
 		//TODO: Make this more efficient. sprintf is not really known as a performance-monster
 
@@ -427,7 +437,7 @@ namespace Scales
 		return left.concat(String(newData));
 	}
 
-	String operator+(int left, String right)
+	String operator+(int left, const String &right)
 	{
 		//TODO: Make this more efficient. sprintf is not really known as a performance-monster
 
@@ -436,6 +446,75 @@ namespace Scales
 		sprintf(newData, "%d", left);
 
 		return String(newData).concat(right);
+	}
+
+
+	//public class ByteArrayOutputStream
+
+	ByteArrayOutputStream::ByteArrayOutputStream()
+	{
+		length = 32;
+		count = 0;
+
+		buffer = new uint8_t[length];
+	}
+
+	ByteArrayOutputStream::~ByteArrayOutputStream()
+	{
+		delete[] buffer;
+	}
+
+	void ByteArrayOutputStream::write(uint8_t c)
+	{
+		uint32_t newcount = count + 1;
+
+		if(newcount > length)
+		{
+			uint32_t shiftedLen = length << 1;
+			uint32_t newLen = (shiftedLen >= newcount) ? shiftedLen : newcount;
+
+			uint8_t *newBuffer = new uint8_t[newLen];
+
+			for(uint32_t i = 0; i < length; i++)
+			{
+				newBuffer[i] = buffer[i];
+			}
+
+			delete[] buffer;
+			buffer = newBuffer;
+			length = newLen;
+		}
+
+		buffer[count] = c;
+
+		count = newcount;
+	}
+
+	uint32_t ByteArrayOutputStream::size()
+	{
+		return count;
+	}
+
+	void ByteArrayOutputStream::reset()
+	{
+		count = 0;
+	}
+
+	uint8_t *ByteArrayOutputStream::copyBuffer()
+	{
+		uint8_t *newBuffer = new uint8_t[length];
+
+		for(uint32_t i = 0; i < length; i++)
+		{
+			newBuffer[i] = buffer[i];
+		}
+
+		return newBuffer;
+	}
+
+	uint8_t *ByteArrayOutputStream::getBuffer()
+	{
+		return buffer;
 	}
 
 }

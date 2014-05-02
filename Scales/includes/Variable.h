@@ -12,7 +12,20 @@ namespace Scales
 
     public:
 
-        DataType getType();
+    		Variable(const String &pName, const DataType &pType, const AccessType &pAccessType);
+
+        	String getName() const;
+
+        	DataType getType() const;
+
+        	AccessType getAccessType() const;
+
+        private:
+
+        	String name;
+        	DataType type;
+        	AccessType accessType;
+
     };
 
 }
