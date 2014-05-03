@@ -45,6 +45,11 @@ namespace Scales
 		return returnType;
 	}
 
+	AccessType Function::getAccessType() const
+	{
+		return accessType;
+	}
+
 	String Function::getName() const
 	{
 		return functionName;

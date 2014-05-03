@@ -1,16 +1,132 @@
 
 
 
-namespace System;
+script foo
 
+
+	int i = 0;
+	
+	public new(int i)
+	
+	
+	end
+
+end
+
+
+script bar
+
+
+	object<foo> o = new foo(12);
+
+end
+
+#* namespace std;
+
+script Number
+
+	public func int intValue() end
+	
+	public func long longValue() end
+	
+	public func float floatValue() end
+	
+	public func double doubleValue() end
+	
+	public func void setValue(int val) end
+
+	public func void setValue(long val) end
+	
+	public func void setValue(float val) end
+	
+	public func void setValue(double val) end
+	
+	public func object<Number> clone() end
+	
+end
+
+# The standard library should provide classes like this one for every primitive type
+script Integer extends Number
+	
+	private int value;
+	
+	public func int intValue()
+	
+		return value;
+	
+	end
+	
+	public func long longValue()
+	
+		return value->long;
+	
+	end
+	
+	public func float floatValue()
+	
+		return value->float;
+	
+	end
+	
+	public func double doubleValue()
+	
+		return value->double;
+	
+	end
+	
+	public func void setValue(int val)
+	
+		value = val;
+		
+	end
+	
+	public func void setValue(long val)
+	
+		value = val->int;
+		
+	end
+	
+	public func void setValue(float val)
+	
+		value = val->int;
+		
+	end
+	
+	public func void setValue(double val)
+	
+		value = val->double;
+		
+	end
+	
+	public func object<Integer> clone()
+	
+		object<Integer> newInt = new Integer();
+		
+		newInt.setValue(value);
+		
+		return newInt;
+	
+	end
+	
+end
+
+
+namespace default;
 
 script Actor
 
-	int health = 100;
+	private native int health;
 
 	func int getHealth()
 	
 		return health;
+	
+	end
+	
+	# Example for references through objects
+	public func void incrementInt(object<Integer> i)
+	
+		i.setValue(i.intValue() + 1);
 	
 	end
 
@@ -20,10 +136,40 @@ end
 
 static script asdf
 
+	int constExpr = 1 + 1; # Currently, the compiler knows it could simplify this expression, but not how
 	
 	object<Actor> o;
 	
-	int i = o.getHealth();
+	int i = o.getHealth(); # This will fail during runtime, as o is currently null
 	
 
 end
+
+
+
+namespace test;
+
+script test
+
+	public func new(int i)
+	
+		# This is a constructor
+		
+		this.i = i;
+	
+	end
+	
+	public func new(int i, float f)
+	
+	end
+
+	private int i = 0; # This is assigned at construct time, but BEFORE the constructor is called
+	
+	private object<test> o = new test(i); # Wil result in an infinite loop during runtime
+	
+end
+
+
+*#
+
+

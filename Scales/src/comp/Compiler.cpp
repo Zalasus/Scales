@@ -196,7 +196,7 @@ namespace Scales
 
     	while(!t.is(Token::TT_KEYWORD,"end"))
     	{
-    		if(isAccessModifier(t) || t.is(Token::TT_KEYWORD,"native") || t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD,"event") || isDatatype(t))
+    		if(isAccessModifier(t) || t.is(Token::TT_KEYWORD,"native") || t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD,"event") || t.is(Token::TT_KEYWORD,"new") || isDatatype(t))
     		{
     			AccessType accessType = AccessType::PRIVATE;
     			bool explicitType = false;
@@ -223,16 +223,27 @@ namespace Scales
     			{
     				t = lexer->readToken();
 
-    				if(!isDatatype(t) && !t.is(Token::TT_KEYWORD,"void"))
+    				if(isDatatype(t) || t.is(Token::TT_KEYWORD,"void"))
+    				{
+    					DataType returntype = t.is(Token::TT_KEYWORD,"void") ? DataType::NOTYPE : dataType(t);
+
+    					functionDec(accessType, native, returntype, false);
+
+    				}else
     				{
     					error("Expected data type or 'void' after func keyword, but found: " + t.getLexem(), t.getLine());
     				}
 
-    				DataType returntype = t.is(Token::TT_KEYWORD,"void") ? DataType::NOTYPE : dataType(t);
+    			}else if(t.is(Token::TT_KEYWORD, "new"))
+				{
+					if(native)
+					{
+						error("Constructors must not be native", t.getLine());
+					}
 
-    				functionDec(accessType, native, returntype, false);
+					constructorDec(accessType);
 
-    			}else if(t.is(Token::TT_KEYWORD,"event"))
+				}else if(t.is(Token::TT_KEYWORD,"event"))
     			{
     				if(explicitType && !accessType.equals(AccessType::PUBLIC))
     				{
@@ -296,7 +307,7 @@ namespace Scales
 
     			}else
     			{
-    				error("Expected 'func' or data type after modifiers, but found: " + t.getLexem(), t.getLine());
+    				error("Expected 'func', 'event', 'new' or data type after modifiers, but found: " + t.getLexem(), t.getLine());
     			}
 
     		}else if(t.getType() == Token::TT_IDENT)
@@ -898,7 +909,7 @@ namespace Scales
 			DataType paraType = paramTypes[i];
 			String paraName = paramNames[i];
 
-			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "', private");
+			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
 
 			writeASM("POPVAR '" + paraName + "'");
 		}
@@ -909,6 +920,111 @@ namespace Scales
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
     }
+
+    void Compiler::constructorDec(const AccessType &accessType)
+	{
+
+		if(accessType.equals(AccessType::UNIVERSAL))
+		{
+			error("universal access type is not applicable for constructors", lexer->getCurrentLine());
+		}
+
+		Token t = lexer->readToken();
+
+		if(!t.is(Token::TT_OPERATOR,"("))
+		{
+			error("Expected parameter list after constructor header, but found: " + t.getLexem(), t.getLine());
+		}
+
+		vector<DataType> paramTypes = vector<DataType>();
+		vector<String> paramNames = vector<String>();
+
+		if(!lexer->peekToken().is(Token::TT_OPERATOR,")"))
+		{
+			do
+			{
+				t = lexer->readToken();
+
+				if(isDatatype(t))
+				{
+					DataType type = dataType(t);
+
+					paramTypes.push_back(type);
+
+					t = lexer->readToken();
+					if(t.getType() != Token::TT_IDENT)
+					{
+						error("Expected variable name in parameter list, but found: " + t.getLexem(), t.getLine());
+					}
+					paramNames.push_back(t.getLexem());
+
+					t = lexer->readToken();
+
+					if(!(t.is(Token::TT_OPERATOR,",") || (t.is(Token::TT_OPERATOR,")"))))
+					{
+						error("Expected , or closing parentheses in parameter list, but found: " + t.getLexem(), t.getLine());
+					}
+
+				}else
+				{
+					error("Unexpected token in parameter list. Found: " + t.getLexem(), t.getLine());
+				}
+
+			}while(t.is(Token::TT_OPERATOR,","));
+
+		}else
+		{
+			t = lexer->readToken();
+		}
+
+		if(!t.is(Token::TT_OPERATOR,")"))
+		{
+			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
+		}
+
+		String defInstr = String("DECLAREFUNC 'new',") + DataType::NOTYPE.getTypeID() + "," + (int)accessType.getTypeID() + "," + (String("") + (int32_t)paramNames.size()) + ",";
+
+		for(uint32_t i = 0; i < paramTypes.size(); i++)
+		{
+			defInstr = defInstr + (int32_t)paramTypes[i].getTypeID();
+
+			if(i < paramTypes.size()-1)
+			{
+				defInstr += ";";
+			}
+		}
+
+		int currentFunctionUID = getNewUID();
+
+		Function func = Function(String("new"), paramTypes, DataType::NOTYPE, accessType, false, false, 0); //TODO: Change adress during assembly
+		currentScript->declareFunction(func);
+
+		defInstr += String(", constructor_uid") + currentFunctionUID +  "_start";
+
+		writeASM(defInstr);
+
+		writeASM(String("JUMP constructor_uid") + currentFunctionUID + "_end");
+
+		writeASM(String("constructor_uid") + currentFunctionUID +  "_start:");
+
+		writeASM("BEGIN");
+
+		for(int i = paramTypes.size()-1; i >= 0 ; i--)
+		{
+			DataType paraType = paramTypes[i];
+			String paraName = paramNames[i];
+
+			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
+
+			writeASM("POPVAR '" + paraName + "'");
+		}
+
+		functionBlock(BlockIdent(BlockIdent::BT_FUNC,currentFunctionUID), DataType::NOTYPE);
+
+		writeASM("END");
+
+		writeASM(String("constructor_uid") + currentFunctionUID + "_end:");
+	}
 
     DataType Compiler::functionCall(const Token &ident, bool member, const DataType &baseType)
     {
@@ -969,6 +1085,11 @@ namespace Scales
 			{
 				error("Function '" + Function::createInfoString(ident.getLexem(), paramTypes) + "' was not defined in given object type script '" + baseType.getSpecifier() + "'", t.getLine());
 			}
+			
+			if(function->getAccessType().equals(AccessType::PRIVATE))
+			{
+				error("Function '" + Function::createInfoString(ident.getLexem(), paramTypes) + "' in given object type script '" + baseType.getSpecifier() + "' is private", t.getLine());
+			}
 
 			writeASM("CALLMEMBER '" + funcName + "'," + paramCount);
 
@@ -980,10 +1101,11 @@ namespace Scales
 
 			if(function == null)
 			{
-				//TODO: Add parameter information to this error message
 				error("Function '" + Function::createInfoString(ident.getLexem(), paramTypes) + "' was not defined in current script", t.getLine());
 			}
 
+			//No need to check for private, as we are calling from the same script
+			
 			writeASM("CALL '" + funcName + "'," + paramCount);
 
 			return function->getReturnType();
@@ -1407,7 +1529,81 @@ namespace Scales
 
         }else if(t.is(Token::TT_KEYWORD,"new"))
         {
-            //TODO: implement NEW here
+            Token scriptname = lexer->readToken();
+			
+			if(scriptname.getType() != Token::TT_IDENT)
+			{
+				error("Expected scriptname after 'new' keyword, but found: " + scriptname.getLexem(), scriptname.getLine());
+			}
+			
+			Token t2 = lexer->readToken();
+			if(!t2.is(Token::TT_OPERATOR,"("))
+			{
+				error("Expected parameter list after scriptname in constructor call, but found: " + t2.getLexem(), t2.getLine());
+			}
+
+			int paramCount = 0;
+
+			vector<DataType> paramTypes = vector<DataType>();
+
+			t2 = lexer->peekToken();
+			if(!t2.is(Token::TT_OPERATOR,")"))
+			{
+
+				do
+				{
+					ExpressionInfo info = expression();
+
+					paramTypes.push_back(info.getType());
+
+					paramCount++;
+					t2 = lexer->readToken();
+
+				}while(t2.is(Token::TT_OPERATOR,","));
+
+				if(!t2.is(Token::TT_OPERATOR,")"))
+				{
+					error("Expected closing parentheses after parameter list in constructor call, but found: " + t2.getLexem(), t2.getLine());
+				}
+
+			}else
+			{
+				lexer->readToken();
+			}
+			
+			Script *script = scriptSystem.getScript(scriptname.getLexem());
+			if(script == null)
+			{
+				error("Given script '" + scriptname.getLexem() + "' in new statement was not declared",t2.getLine());
+			}
+			
+			writeASM("NEW '" + scriptname.getLexem() + "'");
+			
+			Function *constr = script->getFunction("new", paramTypes);
+			
+			if(constr == null)
+			{
+				if(paramCount > 0)
+				{
+					error("Constructor " + Function::createInfoString(scriptname.getLexem(), paramTypes) + " was not declared", t2.getLine());
+				}
+				
+			}else
+			{
+				if(constr->getAccessType().equals(AccessType::PRIVATE))
+				{
+					error("Constructor " + Function::createInfoString(scriptname.getLexem(), paramTypes) + " is private", t2.getLine());
+				}
+			
+				writeASM("COPY");
+				writeASM(String("CALLMEMBER 'new',") + paramCount);
+			}
+			
+			DataType dt = DataType::OBJECT;
+			dt.initSpecifier(scriptname.getLexem());
+
+			return ExpressionInfo(dt, false);
+
         }else if(t.is(Token::TT_KEYWORD,"null"))
         {
             writeASM("PUSHNULL");

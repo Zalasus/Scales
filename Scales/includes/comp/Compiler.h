@@ -97,8 +97,8 @@ namespace Scales
         void leftEval(const Token &firstIdent);
         DataType rightEval();
 
-        //TODO: Change access type to own struct
         void functionDec(const AccessType &accessType, bool native, const DataType &returnType, bool event);
+        void constructorDec(const AccessType &accessType);
 
         DataType dataType(const Token &type);
 

@@ -31,6 +31,7 @@ namespace Scales
 		bool isNative() const;
 		String getName() const;
 		DataType getReturnType() const;
+		AccessType getAccessType() const;
 
 		bool is(const String &name, const vector<DataType> &paramTypes) const;
 
