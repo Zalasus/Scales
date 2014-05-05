@@ -41,4 +41,10 @@ int main()
 	in.close();
 
 
+	/*ScriptSystem ss = ScriptSystem();
+
+	ss.declareLink("Console", thingThatExtendsScriptable);
+
+	*/
+
 }

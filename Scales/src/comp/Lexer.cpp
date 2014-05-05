@@ -1,27 +1,31 @@
 
 #include "comp/Lexer.h"
 #include "Nein.h"
-#include <iostream>
+
 #include <cstdio>
+
+#include <iostream>
 
 namespace Scales
 {
 
 	//public class lexer
 
-    Lexer::Lexer(istream &in) : input(in)
+    Lexer::Lexer(istream &pInput, const String *pKeywords, const uint32_t pKeywordCount, const String *pOperators, const uint32_t pOperatorCount, const bool pIgnoreComments)
+    :
+    		input(pInput),
+    		keywords(pKeywords),
+    		keywordCount(pKeywordCount),
+    		operators(pOperators),
+    		operatorCount(pOperatorCount),
+    		ignoreComments(pIgnoreComments)
     {
         currentIndex = 0;
         currentLine = 1;
 
-        //input = in;
-
         allowEOF = true;
 
         readNext();
-
-        keywords = vector<String>();
-        operators = vector<String>();
     }
 
     Lexer::~Lexer()
@@ -53,21 +57,6 @@ namespace Scales
         }
 
         return nextToken;
-    }
-
-    void Lexer::declareKeyword(const String &s)
-    {
-    	keywords.push_back(s);
-    }
-
-    void Lexer::declareOperator(const String &s)
-	{
-		operators.push_back(s);
-	}
-
-    void Lexer::setIgnoreComments(bool ic)
-    {
-    	ignoreComments = ic;
     }
 
     uint32_t Lexer::getCurrentLine()
@@ -289,7 +278,7 @@ namespace Scales
 
     bool Lexer::isKeyword(const String &s)
     {
-    	for(uint32_t i = 0; i < keywords.size() ; i++)
+    	for(uint32_t i = 0; i < keywordCount ; i++)
     	{
     		if(keywords[i].equals(s))
 			{
@@ -302,7 +291,7 @@ namespace Scales
 
     bool Lexer::isOperator(const String &s)
 	{
-    	for(uint32_t i = 0; i < operators.size() ; i++)
+    	for(uint32_t i = 0; i < operatorCount ; i++)
 		{
 			if(operators[i].equals(s))
 			{
@@ -315,7 +304,7 @@ namespace Scales
 
     bool Lexer::isPartOfOperator(const String &op)
 	{
-    	for(uint32_t i = 0; i < operators.size(); i++)
+    	for(uint32_t i = 0; i < operatorCount; i++)
     	{
     		String so = operators[i];
 

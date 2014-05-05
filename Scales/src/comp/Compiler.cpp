@@ -6,96 +6,16 @@
 namespace Scales
 {
 
-	//TODO: Find out if "const Object &o" is really more efficient than the stuff that has to be copied all the time
+	//TODO: Performance optimization!!! This whole code looks like its your first C++ project (which is kind of true). And try to reduce executable size. We passed 1MB already and that was in v0.2
+	//(okay, I have to admit, the 1MB were in Debug configuration. In Release it's just about 200kB. But anyway: Keep it small! 847kB at max!)
 
 	//public class compiler
 
     Compiler::Compiler(istream &in)
     {
-    	lexer = new Lexer(in);
-
-    	keywords = vector<String>(30);
-    	keywords.push_back("namespace");
-    	keywords.push_back("default");
-    	keywords.push_back("begin");
-    	keywords.push_back("end");
-    	keywords.push_back("public");
-    	keywords.push_back("private");
-    	keywords.push_back("universal");
-    	keywords.push_back("func");
-    	keywords.push_back("event");
-    	keywords.push_back("native");
-    	keywords.push_back("void");
-    	keywords.push_back("script");
-    	keywords.push_back("static");
-    	keywords.push_back("links");
-    	keywords.push_back("extends");
-    	keywords.push_back("uses");
-    	keywords.push_back("return");
-    	keywords.push_back("while");
-    	keywords.push_back("if");
-    	keywords.push_back("elseif");
-    	keywords.push_back("else");
-    	keywords.push_back("break");
-    	keywords.push_back("null");
-    	keywords.push_back("this");
-    	keywords.push_back("parent");
-    	keywords.push_back("goto");
-    	keywords.push_back("new");
-
-    	datatypes = vector<String>(8);
-    	datatypes.push_back("int");
-    	datatypes.push_back("long");
-    	datatypes.push_back("float");
-    	datatypes.push_back("double");
-    	datatypes.push_back("string");
-    	datatypes.push_back("object");
-
-    	operators = vector<String>(25);
-    	operators.push_back("+");
-    	operators.push_back("-");
-    	operators.push_back("*");
-    	operators.push_back("/");
-    	operators.push_back("=");
-    	operators.push_back("+=");
-    	operators.push_back("-=");
-    	operators.push_back("*=");
-    	operators.push_back("/=");
-    	operators.push_back("(");
-    	operators.push_back(")");
-    	operators.push_back("->");
-    	operators.push_back("<");
-    	operators.push_back(">");
-    	operators.push_back("<=");
-    	operators.push_back(">=");
-    	operators.push_back("!=");
-    	operators.push_back("==");
-    	operators.push_back("&");
-    	operators.push_back("|");
-    	operators.push_back("!");
-    	operators.push_back(".");
-    	operators.push_back(",");
-    	operators.push_back(";");
-
-
-    	for(uint16_t i = 0; i < keywords.size(); i++)
-    	{
-    		lexer->declareKeyword(keywords[i]);
-    	}
-
-    	for(uint16_t i = 0; i < datatypes.size(); i++)
-		{
-			lexer->declareKeyword(datatypes[i]);
-		}
-
-    	for(uint16_t i = 0; i < operators.size(); i++)
-		{
-			lexer->declareOperator(operators[i]);
-		}
+    	lexer = new Lexer(in, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true);
 
     	currentScript = null;
-
-    	lexer->setIgnoreComments(true);
 
     	lastUID = 0;
     }
@@ -1667,10 +1587,10 @@ namespace Scales
     		return false;
     	}
 
-    	for(uint16_t i = 0; i < datatypes.size(); i++)
+    	for(uint16_t i = 0; i < DATATYPE_COUNT; i++)
     	{
 
-    		if(t.getLexem().equals(datatypes[i]))
+    		if(t.getLexem().equals(DATATYPES[i]))
     		{
     			return true;
     		}
@@ -1701,6 +1621,85 @@ namespace Scales
     	//TODO: Do stuff with the error message and throw exception
     	throw Exception(String("Error in line ") + line + ": " + s);
     }
+
+    const String Compiler::KEYWORDS[] =
+	{
+			"namespace",
+			"default",
+			"begin",
+			"end",
+			"public",
+			"private",
+			"universal",
+			"func",
+			"event",
+			"native",
+			"void",
+			"script",
+			"static",
+			"links",
+			"extends",
+			"uses",
+			"return",
+			"while",
+			"if",
+			"elseif",
+			"else",
+			"break",
+			"null",
+			"this",
+			"parent",
+			"goto",
+			"new",
+
+			"int",
+			"long",
+			"float",
+			"double",
+			"string",
+			"object"
+	};
+	const uint32_t Compiler::KEYWORD_COUNT = sizeof(KEYWORDS)/sizeof(String);
+
+	const String Compiler::DATATYPES[] =
+	{
+			"int",
+			"long",
+			"float",
+			"double",
+			"string",
+			"object"
+	};
+	const uint32_t Compiler::DATATYPE_COUNT = sizeof(DATATYPES)/sizeof(String);
+
+	const String Compiler::OPERATORS[] =
+	{
+			"+",
+			"-",
+			"*",
+			"/",
+			"=",
+			"+=",
+			"-=",
+			"*=",
+			"/=",
+			"(",
+			")",
+			"->",
+			"<",
+			">",
+			"<=",
+			">=",
+			"!=",
+			"==",
+			"&",
+			"|",
+			"!",
+			".",
+			",",
+			";"
+	};
+	const uint32_t Compiler::OPERATOR_COUNT = sizeof(OPERATORS)/sizeof(String);
 
 
     //private class ExpressionInfo

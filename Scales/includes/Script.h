@@ -46,8 +46,6 @@ namespace Scales
 		DataType returnType;
 		AccessType accessType;
 
-		vector<vector<Variable>> localsStack;
-
 		bool native;
 		bool event;
 

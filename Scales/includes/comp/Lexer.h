@@ -4,7 +4,6 @@
 
 #include "Nein.h"
 #include <istream>
-#include <vector>
 
 #define CH_LINEFEED 0x0A
 #define I_DECIMAL_POINT '.'
@@ -17,7 +16,6 @@
 #define NUMBERS String("0123456789")
 
 using std::istream;
-using std::vector;
 
 namespace Scales
 {
@@ -83,17 +81,12 @@ namespace Scales
     {
     public:
 
-        Lexer(istream &in);
+        Lexer(istream &in, const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);
         ~Lexer();
 
         Token readToken();
 
         Token peekToken();
-
-        void declareKeyword(const String &s);
-        void declareOperator(const String &s);
-
-        void setIgnoreComments(bool ic);
 
         uint32_t getCurrentLine();
 
@@ -126,14 +119,16 @@ namespace Scales
         Token nextToken;
 
         bool allowEOF; //Set to true by scanner if an occuring EOF should be counted as an error, like while reading a string literal
-        bool ignoreComments;
 
         uint32_t currentLine;
         uint32_t currentIndex;
 
-        vector<String> keywords;
-        vector<String> operators;
+        const String *keywords;
+        const uint32_t keywordCount;
+        const String *operators;
+        const uint32_t operatorCount;
 
+        const bool ignoreComments;
     };
 
 }

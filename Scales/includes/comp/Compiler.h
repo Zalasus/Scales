@@ -84,10 +84,6 @@ namespace Scales
 
         uint32_t lastUID;
 
-        vector<String> keywords;
-        vector<String> datatypes;
-        vector<String> operators;
-
         void mainBlock();
         void script(const String &name, bool staticScript);
         BlockIdent::BlockType functionBlock(const BlockIdent &block, const DataType &returnType);
@@ -132,6 +128,16 @@ namespace Scales
         void writeASM(const String &line);
 
         void error(const String &message, int line);
+
+
+        static const String KEYWORDS[];
+        static const uint32_t KEYWORD_COUNT;
+
+        static const String DATATYPES[];
+        static const uint32_t DATATYPE_COUNT;
+
+        static const String OPERATORS[];
+        static const uint32_t OPERATOR_COUNT;
     };
 
 }

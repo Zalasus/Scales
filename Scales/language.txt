@@ -2,8 +2,8 @@
 +=======================+
 |  The Scales language  |
 |     specification     |
-|        V. 1.0         |
-|  (C) KniftoSoft 2014  |
+|        V. 1.1         |
+|   (C)  Zalasus 2014   |
 +=======================+
 
 
@@ -13,15 +13,20 @@ Contents
 
     1 - Changelog
     2 - Foreword
-    3 - Paradigms
-    3 - Data types
-
+    3 - Design paradigms
+    4 - Programming paradigms
+	5 - Type system
+	6 - Data types
+	7 - Scripts
+	8 - 847
+	
 
 
 1 - Changelog
 =============
 
 29.03.2014  1.0     First specification
+04.05.2014	1.1		Revisited OOP-features
 
 
 
@@ -33,6 +38,11 @@ Contents
     Scales is the official scripting language for the NRPG3 game engine. It is
     also designed to be easily integrated into other applications.
 
+	Scales evolved from the late developement versions of KniftoScript 2, which
+	relied on the reflection features of its Java-based VM. As the developement
+	of NRPG3 switched from Java to C++, a new OOP model without the need for
+	native reflection had to be defined.
+
 
 
 3 - Design paradigms
@@ -40,10 +50,20 @@ Contents
 
     Scales was designed to do basic tasks on script-layer as also to be able to
     delegate them to the underlaying implementation.
+    
+    The interfaces between script and implementation are defined in the same
+    language and source file as the script itself.
 
-    As performance is one of the most important features of the Scales language,
+    As performance is one of the most important features of the Scales language
     it is designed to be compiled during runtime rather than to be interpreted.
+	Therefore, the implementation should provide factory methods which can 
+	easily convert a script source file into an executeable script.
 
+	Another developement target of the Scales implementation is to keep it
+	small. The goal is to keep the compiled versions of both the script vm and
+	the script compiler UNDER 847kB (including everything that is needed to run
+	them).
+	 
 
 
 4 - Programming paradigms
@@ -52,7 +72,6 @@ Contents
     -Imperative
     -Structured
     -Object-oriented
-
 
 
 5 - Type system
@@ -64,7 +83,7 @@ Contents
 
 
 6 - Data types
-==========================
+==============
 
     Scales knows the following data types:
 
@@ -73,13 +92,55 @@ Contents
         float   -   32 bit IEEE 754 float representation with unified NaN
         double  -   64 bit IEEE 754 float representation with unified NaN
         string  -   byte array with a max. length of 2^32 - 1
-        object  -   container for primitives and objects
+        object  -   container for scripted objects
+        
+        
+        
+7 - Scripts
+===========
+
+	Excecutable code exists in the form of "scripts", which can be compared to
+	classes of other languages. A script reflects the hidden data structure of
+	the implementation using the language features functions, events and 
+	variables. 
+	Those may be externalized, meaning the script only provides
+	their declaration(how the element looks), while the functionality is
+	delegated to the implementation. Those elements are called "native".
+	
+	Native functions and variables can only exist in a script that defines
+	to which unit(class) of the implementation the actions should be delegated.
+	This definition is called a "link".
+	
+	Scripts WITHOUT links may be "instantiated", so their variables and
+	functions can be accessed through variables of the special "object" type.
+	Multiple instances of a single script can exist simultaneously. In this
+	way, scripts act the same as classes in other object-orientated languages.
+	
+	Scripts WITH links can be used as instances through object variables, too,
+	but this requires the implementation to provide native methods to create
+	them, as every instance of a linked script requires an instance of the
+	linked reflection unit(class).
+	
 
 
+8 - 847
+=======
 
-
-
-
+	The number 847 is not only the amount of kilobytes the library should 
+	weight at maximum, but also the preferred value for debugging features in
+	Scales. It's use is strongly recommended over any other number, although it
+	is completyly optional, of course.
+	 
+	Applications of 847 are all the places the common "Hello World"s, 42s,
+	mutliples of the latter and Monty Python's Flying Circus-references are put
+	to use in other languages.
+	
+	Allowed variations of 847 are 8.47 and their string representations.
+	It is important that the number is spoken "eight fourtyseven" to prevent
+	mistaking it for a plain normal, boring 847.
+	
+	The exact meaning of 847 is not provided in this specification as user
+	creativity is also part of the desired programming experience in Scales.
 
 
 

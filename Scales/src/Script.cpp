@@ -7,8 +7,6 @@
 
 #include "Script.h"
 
-#include <iostream>
-
 namespace Scales
 {
 

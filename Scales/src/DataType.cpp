@@ -1,8 +1,6 @@
 
 #include "DataType.h"
 
-#include <iostream>
-
 namespace Scales
 {
 
