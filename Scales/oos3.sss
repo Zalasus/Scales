@@ -4,12 +4,25 @@
 script foo
 
 
-	int i = 0;
+	public int i = 0;
 	
-	public new(int i)
+	public init(int i)
 	
 	
 	end
+
+	public func void thisIsAVoid()
+	
+		return;
+		
+	end
+	
+	public func int thisIsAnInt()
+	
+		return 1;
+	
+	end
+	
 
 end
 
@@ -18,6 +31,10 @@ script bar
 
 
 	object<foo> o = new foo(12);
+
+	o.i = 100;
+	
+	new foo(1).i = 100;
 
 end
 

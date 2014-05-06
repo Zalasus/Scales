@@ -46,21 +46,33 @@ namespace Scales
 
 	class ExpressionInfo
     {
-
     public:
 
-    	ExpressionInfo(const DataType &t, bool cons);
+		enum FactorType
+		{
+			FT_VARIABLE_REF,
+			FT_FUNCTION_RETURN,
+			FT_LITERAL,
+			FT_MATH_EXPR
+
+		};
+
+    	ExpressionInfo(const DataType &dtype, const bool cons, const FactorType ftype);
 
     	bool isConstant();
 
     	DataType getType();
 
+    	FactorType getFactorType();
+
 
     private:
 
-    	DataType type;
+    	DataType dataType;
 
     	bool constant;
+
+    	FactorType factorType;
 
     };
 
@@ -90,7 +102,7 @@ namespace Scales
 
         void ifStatement(const DataType &returnType);
 
-        void leftEval(const Token &firstIdent);
+        void leftEval();
         DataType rightEval();
 
         void functionDec(const AccessType &accessType, bool native, const DataType &returnType, bool event);
@@ -98,14 +110,14 @@ namespace Scales
 
         DataType dataType(const Token &type);
 
-        ExpressionInfo expression();
-        ExpressionInfo relationalExpression();
-        ExpressionInfo arithmeticExpression();
-        ExpressionInfo term();
-        ExpressionInfo castFactor();
-        ExpressionInfo signedFactor();
-        ExpressionInfo memberFactor();
-        ExpressionInfo factor();
+        ExpressionInfo expression(const bool leftEval = false);
+        ExpressionInfo relationalExpression(const bool leftEval = false);
+        ExpressionInfo arithmeticExpression(const bool leftEval = false);
+        ExpressionInfo term(const bool leftEval = false);
+        ExpressionInfo castFactor(const bool leftEval = false);
+        ExpressionInfo signedFactor(const bool leftEval = false);
+        ExpressionInfo memberFactor(const bool leftEval = false);
+        ExpressionInfo factor(const bool leftEval = false);
 
         DataType functionCall(const Token &ident, bool member, const DataType &baseType = DataType::NOTYPE);
 
