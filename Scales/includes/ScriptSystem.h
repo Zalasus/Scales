@@ -15,11 +15,11 @@ namespace Scales
 
     public:
 
-    	Script *getScript(const String &scriptname);
-
-    	Variable *getUniversal(const String &name);
+    	Script *getScript(const ScriptIdent &scriptident);
 
     	void declareScript(Script &script);
+
+    	bool isNamespaceDeclared(const String &nspace);
 
     private:
 

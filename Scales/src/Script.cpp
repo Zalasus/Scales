@@ -10,6 +10,18 @@
 namespace Scales
 {
 
+	//public class ScriptInstance
+
+	ScriptInstance::ScriptInstance(const Script &s)
+	:
+			myClass(s),
+			programCounter(0)
+	{
+	}
+
+
+	//public class Function
+
 	Function::Function(const String &pName, const vector<DataType> parameterTypes, DataType pReturnType, AccessType pAccessType, bool pNative, bool pEvent, uint32_t pAdress)
 	:
 			functionName(pName),
@@ -38,17 +50,17 @@ namespace Scales
 		return adress;
 	}
 
-	DataType Function::getReturnType() const
+	const DataType &Function::getReturnType() const
 	{
 		return returnType;
 	}
 
-	AccessType Function::getAccessType() const
+	const AccessType &Function::getAccessType() const
 	{
 		return accessType;
 	}
 
-	String Function::getName() const
+	const String &Function::getName() const
 	{
 		return functionName;
 	}
@@ -71,7 +83,7 @@ namespace Scales
 		return functionName.equals(name);
 	}
 
-	String Function::createInfoString(const String &name, vector<DataType> &paramTypes)
+	const String Function::createInfoString(const String &name, vector<DataType> &paramTypes)
 	{
 		String result = name + "(";
 
@@ -89,12 +101,13 @@ namespace Scales
 	}
 
 
-	Script::Script(const String &pName, bool pStatic)
-	:
-			scriptname(pName),
-			staticScript(pStatic)
-	{
+	//public class Script
 
+	Script::Script(const ScriptIdent &scriptident)
+	:
+			ident(scriptident),
+			currentLocalScope(0)
+	{
 	}
 
 	void Script::declareFunction(const Function &func)
@@ -117,23 +130,48 @@ namespace Scales
 		return null;
 	}
 
-	Variable *Script::getVariable(const String &name)
-	{
-		Variable *local = getLocal(name);
-
-		if(local == null)
-		{
-			return getGlobal(name);
-		}
-
-		return null;
-	}
-
 	void Script::declareGlobal(Variable &v)
 	{
 		globals.push_back(v);
 	}
 
+	void Script::declareLocal(Variable &v)
+	{
+		v.setScope(currentLocalScope);
+
+		locals.push_back(v);
+	}
+
+	//TODO: Maybe rename everything here so one can easily recognize this stuff is only for prototyping
+	void Script::leaveLocalScope()
+	{
+		for(uint32_t i = 0; i < locals.size(); i++)
+		{
+			if(locals[i].getScope() >= currentLocalScope)
+			{
+				locals.erase(locals.begin() + i);
+			}
+		}
+
+		if(currentLocalScope > 0)
+		{
+			currentLocalScope--;
+		}
+	}
+
+	void Script::enterLocalScope()
+	{
+		currentLocalScope++;
+	}
+
+	void Script::destroyAllLocals()
+	{
+		locals.clear();
+		currentLocalScope = 0;
+	}
+
+
+	//TODO: Rework this. Variables are not part the script class anymore. they are stored in ScriptInstances, Scripts just contain prototypes
 	Variable *Script::getGlobal(const String &name)
 	{
 		for(uint32_t i = 0; i < globals.size(); i++)
@@ -150,20 +188,24 @@ namespace Scales
 
 	Variable *Script::getLocal(const String &name)
 	{
-		//TODO: Think of something really good to implement locals with correct scoping so they are usable for prototyping
+		for(uint32_t i = 0; i < locals.size(); i++)
+		{
+
+			if(locals[i].getName().equals(name))
+			{
+				return &locals[i];
+			}
+		}
 
 		return null;
 	}
 
-	bool Script::isStatic() const
+
+	const ScriptIdent &Script::getIdent() const
 	{
-		return staticScript;
+		return ident;
 	}
 
-	String Script::getName() const
-	{
-		return scriptname;
-	}
 }
 
 

@@ -15,18 +15,25 @@ namespace Scales
 	{
 		len = 0;
 
-		data = new uint8_t[len];
+		data = null;
 	}
 
 	String::String(const String &s)
 	{
 		len = s.length();
 
-		data = new uint8_t[len];
-
-		for(int32_t i = 0; i < len; i++)
+		if(len > 0)
 		{
-			data[i] = s.charAt(i);
+			data = new uint8_t[len];
+
+			for(int32_t i = 0; i < len; i++)
+			{
+				data[i] = s.charAt(i);
+			}
+
+		}else
+		{
+			data = null;
 		}
 	}
 
@@ -37,7 +44,7 @@ namespace Scales
 
 		while(*(sp++))
 		{
-			if((sp - s) >= 0xFFFF)
+			if((unsigned)(sp - s) == 0xFFFFFFFF) //If there really should be a memory block of 4GB without a single 0 in it, we don't want to create an infinite loop
 			{
 				break;
 			}
@@ -45,11 +52,18 @@ namespace Scales
 
 		len = sp - s - 1;
 
-		data = new uint8_t[len];
-
-		for(int32_t i = 0; i < len; i++)
+		if(len > 0)
 		{
-			data[i] = s[i];
+			data = new uint8_t[len];
+
+			for(int32_t i = 0; i < len; i++)
+			{
+				data[i] = s[i];
+			}
+
+		}else
+		{
+			data = null;
 		}
 	}
 
@@ -130,6 +144,18 @@ namespace Scales
 		}
 
 		return -1;
+	}
+
+	size_t String::hashCode() const
+	{
+		size_t h;
+
+		for (int i = 0; i < len; i++)
+		{
+			h = 31*h + data[i];
+		}
+
+		return h;
 	}
 
 	bool String::equals(const String &s) const
@@ -269,16 +295,29 @@ namespace Scales
 	}
 
 
+	bool String::operator==(const String &s) const
+	{
+		return equals(s);
+	}
+
 	String String::operator=(const String &s)
 	{
 		delete[] data;
 
-		data = new uint8_t[s.length()];
 		len = s.length();
 
-		for(int32_t i = 0; i < len; i++)
+		if(len > 0)
 		{
-			data[i] = s.charAt(i);
+			data = new uint8_t[len];
+
+			for(int32_t i = 0; i < len; i++)
+			{
+				data[i] = s.charAt(i);
+			}
+
+		}else
+		{
+			data = null;
 		}
 
 		return *this;
@@ -287,22 +326,39 @@ namespace Scales
 	String String::operator+=(const String &s)
 	{
 		int32_t newLen = len + s.length();
-		uint8_t *newData = new uint8_t[newLen];
 
-		for(int32_t i = 0; i < newLen; i++)
+		if(newLen > 0)
 		{
-			if(i < len)
-			{
-				newData[i] = data[i];
-			}else
-			{
-				newData[i] = s.charAt(i - len);
-			}
-		}
+			uint8_t *newData = new uint8_t[newLen];
 
-		delete[] data;
-		data = newData;
-		len = newLen;
+			for(int32_t i = 0; i < newLen; i++)
+			{
+				if(i < len)
+				{
+					newData[i] = data[i];
+				}else
+				{
+					newData[i] = s.charAt(i - len);
+				}
+			}
+
+			delete[] data;
+			data = newData;
+			len = newLen;
+
+		}else
+		{
+			//Since all the size variables are signed (I'm not sure why), a very nasty error might actually cause
+			//negative lengths which would result in memory leaks. So better delete data, even if it may be null. It doesn't hurt.
+
+			//By the way, this nasty error would cause strange behaviour
+			//Oh, and we are returning the concate...dingensed string by value which would do EXACTLY THE SAME copy stuff
+			//as we are doing up there. So TODO: Change all the return by values in this class where it is apropri..dingens
+
+			delete[] data;
+			data = null;
+			len = 0;
+		}
 
 		return *this;
 	}
@@ -453,10 +509,10 @@ namespace Scales
 
 	ByteArrayOutputStream::ByteArrayOutputStream()
 	{
-		length = 32;
+		bufferSize = 32;
 		count = 0;
 
-		buffer = new uint8_t[length];
+		buffer = new uint8_t[bufferSize];
 	}
 
 	ByteArrayOutputStream::~ByteArrayOutputStream()
@@ -468,21 +524,21 @@ namespace Scales
 	{
 		uint32_t newcount = count + 1;
 
-		if(newcount > length)
+		if(newcount > bufferSize)
 		{
-			uint32_t shiftedLen = length << 1;
+			uint32_t shiftedLen = bufferSize << 1;
 			uint32_t newLen = (shiftedLen >= newcount) ? shiftedLen : newcount;
 
 			uint8_t *newBuffer = new uint8_t[newLen];
 
-			for(uint32_t i = 0; i < length; i++)
+			for(uint32_t i = 0; i < bufferSize; i++)
 			{
 				newBuffer[i] = buffer[i];
 			}
 
 			delete[] buffer;
 			buffer = newBuffer;
-			length = newLen;
+			bufferSize = newLen;
 		}
 
 		buffer[count] = c;
@@ -500,11 +556,23 @@ namespace Scales
 		count = 0;
 	}
 
-	uint8_t *ByteArrayOutputStream::copyBuffer()
+	uint8_t *ByteArrayOutputStream::toNewArray()
 	{
-		uint8_t *newBuffer = new uint8_t[length];
+		uint8_t *newBuffer = new uint8_t[count];
 
-		for(uint32_t i = 0; i < length; i++)
+		for(uint32_t i = 0; i < count; i++)
+		{
+			newBuffer[i] = buffer[i];
+		}
+
+		return newBuffer;
+	}
+
+	uint8_t *ByteArrayOutputStream::newBufferCopy()
+	{
+		uint8_t *newBuffer = new uint8_t[bufferSize];
+
+		for(uint32_t i = 0; i < bufferSize; i++)
 		{
 			newBuffer[i] = buffer[i];
 		}

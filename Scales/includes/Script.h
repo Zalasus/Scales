@@ -20,7 +20,6 @@ using std::vector;
 namespace Scales
 {
 
-
 	class Function
 	{
 	public:
@@ -29,15 +28,15 @@ namespace Scales
 
 		bool isEvent() const;
 		bool isNative() const;
-		String getName() const;
-		DataType getReturnType() const;
-		AccessType getAccessType() const;
+		const String &getName() const;
+		const DataType &getReturnType() const;
+		const AccessType &getAccessType() const;
 
 		bool is(const String &name, const vector<DataType> &paramTypes) const;
 
 		uint32_t getAdress() const;
 
-		static String createInfoString(const String &name, vector<DataType> &paramTypes);
+		static const String createInfoString(const String &name, vector<DataType> &paramTypes);
 
 	private:
 
@@ -56,31 +55,52 @@ namespace Scales
 	class Script
 	{
 	public:
-		Script(const String &pName, bool pStatic);
+		Script(const ScriptIdent &scriptident);
 
 		void declareFunction(const Function &func);
 		Function *getFunction(const String &name, const vector<DataType> &paramTypes);
 
-		void declareGlobal(Variable &v);
+		void declareLocal(Variable &v);
+		void leaveLocalScope();
+		void enterLocalScope();
+		void destroyAllLocals();
 
-		Variable *getVariable(const String &name);
+		void declareGlobal(Variable &v);
 
 		Variable *getLocal(const String &name);
 		Variable *getGlobal(const String &name);
 
-		bool isStatic() const;
-		String getName() const;
+		const ScriptIdent &getIdent() const;
 
 	private:
 
-		String scriptname;
-		bool staticScript;
+		const ScriptIdent ident;
+
+		uint32_t currentLocalScope;
 
 		vector<Function> functions;
 
 		vector<Variable> globals;
+		vector<Variable> locals;
 	};
 
+
+	class ScriptInstance
+	{
+	public:
+
+		ScriptInstance(const Script &s);
+
+	private:
+
+		const Script &myClass;
+
+		uint32_t programCounter;
+
+		vector<Value> astack;
+		vector<uint32_t> callstack;
+
+	};
 
 }
 

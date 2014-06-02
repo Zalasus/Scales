@@ -13,13 +13,13 @@ Contents
 
     1 - Changelog
     2 - Foreword
-    3 - Design paradigms
-    4 - Programming paradigms
-	5 - Type system
-	6 - Data types
-	7 - Scripts
-	8 - 847
-	
+   	Design paradigms
+    Programming paradigms
+	Type system
+	Data types
+	Scripts
+	847
+	ToDo
 
 
 1 - Changelog
@@ -33,7 +33,10 @@ Contents
 2 - Foreword
 ============
 
-    This is the specification of the Scales scripting language.
+    This is the specification of the Scales scripting language. This document
+    covers all features of the language itself. Features of the compiler/
+    bytecode interpreter/ utility library are covered in their own documents,
+    respectively.
 
     Scales is the official scripting language for the NRPG3 game engine. It is
     also designed to be easily integrated into other applications.
@@ -45,14 +48,14 @@ Contents
 
 
 
-3 - Design paradigms
-====================
+Design paradigms
+================
 
     Scales was designed to do basic tasks on script-layer as also to be able to
     delegate them to the underlaying implementation.
     
     The interfaces between script and implementation are defined in the same
-    language and source file as the script itself.
+    language and source unit as the script itself.
 
     As performance is one of the most important features of the Scales language
     it is designed to be compiled during runtime rather than to be interpreted.
@@ -66,24 +69,26 @@ Contents
 	 
 
 
-4 - Programming paradigms
-=========================
+Programming paradigms
+=====================
 
     -Imperative
     -Structured
     -Object-oriented
 
 
-5 - Type system
-===============
+
+Type system
+===========
 
     -Weak
     -Static
     -Explicit
 
 
-6 - Data types
-==============
+
+Data types
+==========
 
     Scales knows the following data types:
 
@@ -96,14 +101,114 @@ Contents
         
         
         
-7 - Scripts
-===========
+Source units
+============
+
+	Script sources do not rely on the existence of an actual filesystem in
+	their compiling environment. Therefore, there are no constructs to
+	include other files in one compilation unit. All required resources
+	for compiling a Scales program have to be in one file/stream etc. or have
+	to be loaded from libraries during compile time (the specific process is
+	not part of this specification but rather the one of the compiler).
+	
+	Regardless of their storage, source units consist of the following 
+	structures: [...]
+	
+        
+        
+Comments
+========
+
+	In order to allow documentation inside the source code, annotations can be
+	added to source files in the form of comments. All text inside a comment is
+	ignored by the compiler.
+	
+	Scales knows two forms of comments: single-line and multi-line comments.
+	
+	Single-line comments reach from their declaration to the end of the line 
+	they are declared on. They are declared using the hash character #.
+	Example comment:
+	
+		# This is a comment and is not beeing compiled
+		
+	Multi-line comments reach from their declarion to the point they are 
+	explicitly closed. They are started using a hash character followed by an
+	asterisk (#*) and are closed by the same token in reverse (*#).
+	Example comment:
+	
+		#* This comment may be longer than one line.
+		
+		This line is still part of the comment. *#
+		
+		
+	Multiline comments are commonly used for automatic documentation tools that
+	generate source documentions from specially formatted comments.
+	The Scales language specifies no special markup for documentation comments,
+	but as those comments need to be specially marked as such, the popular
+	Javadoc- and Doxygen-style with a double asterisk comment opener (#**) is
+	is also the recommended documentation style for Scales programs (Official 
+	doc syntax may be part of future versions of the Scales language).
+	
+	
+    
+Keywords and Identifiers
+========================
+
+	The Scales language defines the following keywords:
+	(Note: This is a preliminary list and is therefore not yet ordered)
+	
+		namespace	default
+		end			public
+		private		universal
+		func		event
+		native		void
+		script		static
+		links		extends
+		uses		return
+		while		if
+		elseif		else
+		break		null
+		this		parent
+		goto		new
+		init		int
+		long		float
+		double		string
+		object
+	
+	
+	Names for scripts/variables/functions etc. must not be one of the above.
+	Additionally, names must meet the following requirements in order to be
+	used as identifiers:
+	
+	They must start with one of the following characters:
+	
+		abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW_
+		
+	The may continue with zero or more of one of the above characters or a
+	number.
+	
+	
+	    
+Scripts
+=======
 
 	Excecutable code exists in the form of "scripts", which can be compared to
-	classes of other languages. A script reflects the hidden data structure of
-	the implementation using the language features functions, events and 
-	variables. 
-	Those may be externalized, meaning the script only provides
+	classes of other languages. A basic script is defined as follows:
+	
+		'script' <scriptname>
+		
+			<script block>
+			
+		'end'
+	
+	where <scriptname> is a valid identifier (see chapter 
+	"Keywords and Identifiers").
+	
+	The 
+	
+	A script reflects the hidden data structure of
+	the implementation through language features such as functions, events and
+	variables. Those may be externalized, meaning the script only provides
 	their declaration(how the element looks), while the functionality is
 	delegated to the implementation. Those elements are called "native".
 	
@@ -111,20 +216,61 @@ Contents
 	to which unit(class) of the implementation the actions should be delegated.
 	This definition is called a "link".
 	
-	Scripts WITHOUT links may be "instantiated", so their variables and
-	functions can be accessed through variables of the special "object" type.
+	Script instantiation
+	--------------------
+	Scripts may be "instantiated", so their variables and functions can be
+	accessed through variables of the special "object" type.
 	Multiple instances of a single script can exist simultaneously. In this
 	way, scripts act the same as classes in other object-orientated languages.
 	
-	Scripts WITH links can be used as instances through object variables, too,
+	Scripts with links can be used as instances through object variables, too,
 	but this requires the implementation to provide native methods to create
 	them, as every instance of a linked script requires an instance of the
-	linked reflection unit(class).
+	linked reflection unit(class). Therefore, every linked script that needs to
+	be instatiated at runtime needs to supply at least one native constructor
+	which may be called directly using the new-instruction or indirectly
+	through a non-native constructor.
 	
+	
+	
+Namespaces
+==========
 
-
-8 - 847
-=======
+	Scripts are stored in namespaces which can be used to group scripts with
+	similar functionality and in order to reduce the likelyhood of naming
+	conflicts.
+	
+	A namespace declaration affects every script defined after
+	the namespace statement until a new namespace statement is found.
+	
+	Namespaces are identified by the 'namespace'-keyword in the main block of
+	the source unit, followed by the desired name of the namespace (must be a
+	valid identifier) and terminated with a semicolon ';'.
+	In place of the namespace identifier, the 'default' keyword may be used in
+	order to define the following scripts in the same namespace as they would
+	be defined without any namespace given (name of the namespace is an empty
+	string by default).
+	
+	Examples:
+	
+		namespace util; # All following scripts are defined as util:<scriptname>
+		
+		namespace default; # All following scripts are defined as <scriptname>
+		
+		
+	Whenever a script is used, that is not within the same namespace as the
+	script using it, it has to be adressed through the namespace by using the
+	scope operator ':', except if the script to be referenced is in the default
+	namespace. The namespace specifier can also be ommitted if the target
+	script is adressed in the "using" list of the referencing script (see
+	chapter "Script header").
+	
+	Example:
+	
+		public util:Map hashMap = new util:HashMap();
+		
+847
+===
 
 	The number 847 is not only the amount of kilobytes the library should 
 	weight at maximum, but also the preferred value for debugging features in

@@ -11,6 +11,7 @@
 #include "ScriptSystem.h"
 #include "Lexer.h"
 #include "Exception.h"
+#include "ASMStream.h"
 
 using std::istream;
 
@@ -97,7 +98,7 @@ namespace Scales
         uint32_t lastUID;
 
         void mainBlock();
-        void script(const String &name, bool staticScript);
+        void script(const ScriptIdent &scriptident);
         BlockIdent::BlockType functionBlock(const BlockIdent &block, const DataType &returnType);
 
         void ifStatement(const DataType &returnType);
@@ -105,10 +106,12 @@ namespace Scales
         void leftEval();
         DataType rightEval();
 
-        void functionDec(const AccessType &accessType, bool native, const DataType &returnType, bool event);
+        void functionDec(const AccessType &accessType, bool native);
         void constructorDec(const AccessType &accessType);
 
-        DataType dataType(const Token &type);
+        void variableDec(const AccessType &accessType, bool native, bool local);
+
+        DataType dataType();
 
         ExpressionInfo expression(const bool leftEval = false);
         ExpressionInfo relationalExpression(const bool leftEval = false);
@@ -119,13 +122,15 @@ namespace Scales
         ExpressionInfo memberFactor(const bool leftEval = false);
         ExpressionInfo factor(const bool leftEval = false);
 
-        DataType functionCall(const Token &ident, bool member, const DataType &baseType = DataType::NOTYPE);
+        DataType functionCall(const String &funcName, bool member, const DataType &baseType = DataType::NOTYPE);
 
         DataType getTypeOfNumberString(const String &numberString);
 
         String escapeASMChars(const String &s);
 
         uint32_t getNewUID();
+
+        Variable *getVariableInScript(Script *s, const String &name);
 
         bool isLogicOp(const Token &t);
         bool isRelationalOp(const Token &t);
@@ -135,12 +140,14 @@ namespace Scales
 
         bool isAccessModifier(const Token &t);
 
-        bool isDatatype(const Token &t);
+        bool isPrimitive(const Token &t);
 
         void writeASM(const String &line);
 
         void error(const String &message, int line);
 
+
+        ASMStream asmout;
 
         static const String KEYWORDS[];
         static const uint32_t KEYWORD_COUNT;

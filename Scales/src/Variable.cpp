@@ -15,7 +15,8 @@ namespace Scales
 	:
 			name(pName),
 			type(pType),
-			accessType(pAccessType)
+			accessType(pAccessType),
+			scope(0)
 	{
 
 	}
@@ -35,5 +36,14 @@ namespace Scales
 		return accessType;
 	}
 
+	void Variable::setScope(uint32_t i)
+	{
+		scope = i;
+	}
+
+	uint32_t Variable::getScope() const
+	{
+		return scope;
+	}
 }
 

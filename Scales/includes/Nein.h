@@ -9,8 +9,9 @@
 #define NEIN_H_
 
 #include <stdint.h>
-
 #include <ostream>
+
+#include <functional>
 
 #define null NULL
 
@@ -42,6 +43,8 @@ namespace Scales
 		String toUpperCase() const;
 		String toLowerCase() const;
 
+		size_t hashCode() const;
+
 		int32_t length() const;
 
 		uint8_t charAt(int32_t index) const;
@@ -56,6 +59,8 @@ namespace Scales
 
 		String substring(int32_t start) const;
 		String substring(int32_t start, int32_t end) const;
+
+		bool operator==(const String &s) const;
 
 		String operator=(const String &s);
 
@@ -105,16 +110,30 @@ namespace Scales
 
 		void reset();
 
-		uint8_t *copyBuffer();
+		uint8_t *toNewArray();
+		uint8_t *newBufferCopy();
 		uint8_t *getBuffer();
 
 	private:
 		uint8_t *buffer;
-		uint32_t length;
+		uint32_t bufferSize;
 		uint32_t count;
 
 	};
 }
 
+
+namespace std
+{
+	template<>
+	class hash<Scales::String>
+	{
+	public:
+		size_t operator()(const Scales::String &s) const
+		{
+			return s.hashCode();
+		}
+	};
+}
 
 #endif /* STRING_H_ */
