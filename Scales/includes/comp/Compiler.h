@@ -130,7 +130,7 @@ namespace Scales
 
         uint32_t getNewUID();
 
-        Variable *getVariableInScript(Script *s, const String &name);
+        VariablePrototype *getVariableInScript(Script *s, const String &name);
 
         bool isLogicOp(const Token &t);
         bool isRelationalOp(const Token &t);
@@ -141,8 +141,6 @@ namespace Scales
         bool isAccessModifier(const Token &t);
 
         bool isPrimitive(const Token &t);
-
-        void writeASM(const String &line);
 
         void error(const String &message, int line);
 

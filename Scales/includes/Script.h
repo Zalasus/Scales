@@ -24,10 +24,17 @@ namespace Scales
 	{
 	public:
 
-		Function(const String &name, const vector<DataType> paramTypes, DataType returnType, AccessType accessType, bool native, bool event, uint32_t adress);
+		enum FunctionType
+		{
+			FT_NORMAL,
+			FT_CONSTRUCTOR,
+			FT_EVENT
+		};
 
-		bool isEvent() const;
+		Function(const String &name, const vector<DataType> &paramTypes, const DataType &returnType, const AccessType &accessType, bool native, FunctionType type, uint32_t adress);
+
 		bool isNative() const;
+		FunctionType getType() const;
 		const String &getName() const;
 		const DataType &getReturnType() const;
 		const AccessType &getAccessType() const;
@@ -46,7 +53,8 @@ namespace Scales
 		AccessType accessType;
 
 		bool native;
-		bool event;
+
+		FunctionType type;
 
 		uint32_t adress;
 	};
@@ -60,15 +68,15 @@ namespace Scales
 		void declareFunction(const Function &func);
 		Function *getFunction(const String &name, const vector<DataType> &paramTypes);
 
-		void declareLocal(Variable &v);
+		void declareLocal(VariablePrototype &v);
 		void leaveLocalScope();
 		void enterLocalScope();
 		void destroyAllLocals();
 
-		void declareGlobal(Variable &v);
+		void declareGlobal(VariablePrototype &v);
 
-		Variable *getLocal(const String &name);
-		Variable *getGlobal(const String &name);
+		VariablePrototype *getLocal(const String &name);
+		VariablePrototype *getGlobal(const String &name);
 
 		const ScriptIdent &getIdent() const;
 
@@ -80,8 +88,8 @@ namespace Scales
 
 		vector<Function> functions;
 
-		vector<Variable> globals;
-		vector<Variable> locals;
+		vector<VariablePrototype> globals;
+		vector<VariablePrototype> locals;
 	};
 
 
@@ -91,7 +99,14 @@ namespace Scales
 
 		ScriptInstance(const Script &s);
 
+		void initialize();
+
+		Value callFunction(const String &name, const vector<Value> &parameter);
+
 	private:
+
+		void run();
+
 
 		const Script &myClass;
 

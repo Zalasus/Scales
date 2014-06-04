@@ -34,7 +34,7 @@ namespace Scales
 	{
 		writeUShort(s.length());
 
-		for(uint32_t i = 0; i < s.length(); i++)
+		for(int32_t i = 0; i < s.length(); i++)
 		{
 			stream.write(s.charAt(i));
 

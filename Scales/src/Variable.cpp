@@ -11,7 +11,7 @@
 namespace Scales
 {
 
-	Variable::Variable(const String &pName, const DataType &pType, const AccessType &pAccessType)
+	VariablePrototype::VariablePrototype(const String &pName, const DataType &pType, const AccessType &pAccessType)
 	:
 			name(pName),
 			type(pType),
@@ -21,27 +21,27 @@ namespace Scales
 
 	}
 
-	String Variable::getName() const
+	String VariablePrototype::getName() const
 	{
 		return name;
 	}
 
-	DataType Variable::getType() const
+	DataType VariablePrototype::getType() const
 	{
 		return type;
 	}
 
-	AccessType Variable::getAccessType() const
+	AccessType VariablePrototype::getAccessType() const
 	{
 		return accessType;
 	}
 
-	void Variable::setScope(uint32_t i)
+	void VariablePrototype::setScope(uint32_t i)
 	{
 		scope = i;
 	}
 
-	uint32_t Variable::getScope() const
+	uint32_t VariablePrototype::getScope() const
 	{
 		return scope;
 	}

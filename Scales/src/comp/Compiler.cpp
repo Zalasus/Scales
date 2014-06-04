@@ -5,7 +5,15 @@
 #define SCALES_COMPILER_WRITEASM
 
 #ifdef SCALES_COMPILER_WRITEASM
-#include <iostream>
+
+	#include <iostream>
+
+	#define writeASM(s) std::cout << s << std::endl;
+
+#else
+
+	#define writeASM(s)
+
 #endif
 
 
@@ -136,15 +144,10 @@ namespace Scales
     		{
     			variableDec(AccessType::PRIVATE, false, false);
 
-    		}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //private function / private event
+    		}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event") || t.is(Token::TT_KEYWORD, "init")) //private function / private event /private constructor
     		{
 
     			functionDec(AccessType::PRIVATE,false);
-
-    		}else if(t.is(Token::TT_KEYWORD, "init")) //private constructor
-    		{
-
-    			constructorDec(AccessType::PRIVATE);
 
     		}else if(t.is(Token::TT_KEYWORD, "native")) //private native function / private native variable
     		{
@@ -154,7 +157,7 @@ namespace Scales
     			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable
 				{
 
-					variableDec(AccessType::PRIVATE, true, false); //TODO: Define variableDec
+					variableDec(AccessType::PRIVATE, true, false);
 
 				}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //function / event
 				{
@@ -164,6 +167,10 @@ namespace Scales
 				}else if(t.is(Token::TT_KEYWORD, "init")) //constructor
 				{
 					error("Constructors must not be native (This will change. Wait for it)", t.getLine());
+
+				}else
+				{
+					error("Unexpected token after 'native'-keyword: " + t.getLexem(), t.getLine());
 				}
 
     		}else if(isAccessModifier(t)) //variable / function / constructor
@@ -196,11 +203,14 @@ namespace Scales
 				{
 					if(native)
 					{
-						error("Constructors must not be native (This will change. Wait for it)", t.getLine());
+						error("Constructors must not be native (This will change. Wait for it)", t.getLine()); //TODO: Allow constructors beeing native
 					}
 
-					constructorDec(access);
+					functionDec(access, false);
 
+				}else
+				{
+					error("Unexpected token after access modifier: " + t.getLexem(), t.getLine());
 				}
 
     		}else
@@ -556,7 +566,7 @@ namespace Scales
 
 		Token t = lexer->readToken();
 
-		Variable v = Variable(ident.getLexem(), type, accessType);
+		VariablePrototype v = VariablePrototype(ident.getLexem(), type, accessType);
 
 		if(local)
 		{
@@ -567,7 +577,7 @@ namespace Scales
 		}
 
 		//Scope is determined by callstack during runtime
-		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)accessType.getTypeID()); //TODO: Object specifier has to be included
+		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)accessType.getTypeID()); //TODO: Object specifier has to be included, oh and also the native flag
 
 		if(t.is(Token::TT_OPERATOR, "="))
 		{
@@ -585,7 +595,7 @@ namespace Scales
 				error("Expected semicolon after variable initialization, but found: " + t.getLexem(), t.getLine());
 			}
 
-			writeASM("POPVAR '" + t.getLexem() + "'");
+			writeASM("POPVAR '" + ident.getLexem() + "'");
 
 		}else if(!t.is(Token::TT_OPERATOR, ";"))
 		{
@@ -596,21 +606,29 @@ namespace Scales
     void Compiler::functionDec(const AccessType &accessType, bool native)
     {
     	//TODO: Clean up this function; see comment in constructorDec about redundant code
-    	bool event = false;
+    	Function::FunctionType type;
 
     	Token t = lexer->readToken();
 
     	if(t.is(Token::TT_KEYWORD, "event"))
     	{
-    		event = true;
+    		type = Function::FT_EVENT;
 
-    	}else if(!t.is(Token::TT_KEYWORD, "func"))
+    	}else if(t.is(Token::TT_KEYWORD, "init"))
     	{
-    		error("Called functionDec for invalid position in token stream (expected recognizer func or event)", t.getLine());
+    		type = Function::FT_CONSTRUCTOR;
+
+    	}else if(t.is(Token::TT_KEYWORD, "func"))
+    	{
+    		type = Function::FT_NORMAL;
+
+    	}else
+    	{
+    		error("Called functionDec for invalid position in token stream (expected recognizer func, init or event)", t.getLine());
     	}
 
     	DataType returnType = DataType::NOTYPE;
-    	if(!event)
+    	if(type == Function::FT_NORMAL)
     	{
     		t = lexer->peekToken();
 
@@ -624,26 +642,30 @@ namespace Scales
     		}
     	}
 
-    	Token ident = lexer->readToken();
 
-		if(ident.getType() != Token::TT_IDENT)
+		Token ident = (type == Function::FT_CONSTRUCTOR) ? t : lexer->readToken(); //The ident of a constructor is it's recognizer (init)
+
+		if(type != Function::FT_CONSTRUCTOR)
 		{
-			if(event)
+			if(ident.getType() != Token::TT_IDENT)
 			{
-				error("Expected event name after 'event' keyword, but found: " + ident.getLexem(), ident.getLine());
-			}else
+				if(type == Function::FT_EVENT)
+				{
+					error("Expected event name after 'event' keyword, but found: " + ident.getLexem(), ident.getLine());
+				}else
+				{
+					error("Expected function name after function return type, but found: " + ident.getLexem(), ident.getLine());
+				}
+			}
+
+			//TODO: We could replace this thing (also the checking for TT_IDENT) by a new processor function name();
+			if(scriptSystem.isNamespaceDeclared(ident.getLexem()) || (scriptSystem.getScript(ScriptIdent("",ident.getLexem())) != null))
 			{
-				error("Expected function name after function return type, but found: " + ident.getLexem(), ident.getLine());
+				error("Function name '" + ident.getLexem() + "' is already occupied by a script/namespace", ident.getLine());
 			}
 		}
 
-		//TODO: We could replace this thing (also the checking for TT_IDENT) by a new processor function name();
-		if(scriptSystem.isNamespaceDeclared(ident.getLexem()) || (scriptSystem.getScript(ScriptIdent("",ident.getLexem())) != null))
-		{
-			error("Function name '" + ident.getLexem() + "' is already occupied by a script/namespace", ident.getLine());
-		}
-
-		if(!accessType.equals(AccessType::PUBLIC) && event)
+		if(type == Function::FT_EVENT && !accessType.equals(AccessType::PUBLIC))
 		{
 			error("Only public access type is applicable for events", ident.getLine());
 		}
@@ -698,7 +720,7 @@ namespace Scales
 			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
 		}
 
-		Function func = Function(ident.getLexem(), paramTypes, returnType, accessType, native, event, 0); //TODO: Change adress during assembly
+		Function func = Function(ident.getLexem(), paramTypes, returnType, accessType, native, type, 0); //TODO: Change adress during assembly
 		currentScript->declareFunction(func);
 
 		if(native)
@@ -706,17 +728,19 @@ namespace Scales
 			t = lexer->readToken();
 			if(!t.is(Token::TT_OPERATOR, ";"))
 			{
-				error(String("Native ") + (event ? "events" : "functions") + " must not have a body. Expected semicolon after parameter list" ,t.getLine());
+				error(String("Native functions must not have a body. Expected semicolon after parameter list") ,t.getLine());
 			}
 
 			return;
+
+			//TODO: Natives also have to be included in bytecode!
 		}
 
 		String defInstr;
 
-		if(event)
+		if(type == Function::FT_EVENT)
 		{
-			defInstr = String("DECLAREEVENT '") + ident.getLexem() + "'," + (String("") + (int32_t)paramNames.size()) + ",";
+			defInstr = String("REGISTEREVENT '") + ident.getLexem() + "'," + (String("") + (int32_t)paramNames.size()) + ",";
 
 		}else
 		{
@@ -751,7 +775,7 @@ namespace Scales
 			String paraName = paramNames[i];
 
 			//Declare locals prototypes
-			Variable v = Variable(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
+			VariablePrototype v = VariablePrototype(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
 			currentScript->declareLocal(v);
 
 			//Declare parameter variables...
@@ -770,7 +794,7 @@ namespace Scales
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
     }
 
-    void Compiler::constructorDec(const AccessType &accessType)
+    /*void Compiler::constructorDec(const AccessType &accessType)
 	{
     	//TODO: Much, much redundant code with functionDec. Find way to merge both funcs
 
@@ -858,7 +882,7 @@ namespace Scales
 			DataType paraType = paramTypes[i];
 			String paraName = paramNames[i];
 
-			Variable v = Variable(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
+			VariablePrototype v = VariablePrototype(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
 			currentScript->declareLocal(v);
 
 			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
@@ -873,7 +897,7 @@ namespace Scales
 		writeASM("END");
 
 		writeASM(String("constructor_uid") + currentFunctionUID + "_end:");
-	}
+	}*/
 
     DataType Compiler::functionCall(const String &funcName, bool member, const DataType &baseType)
     {
@@ -1227,6 +1251,7 @@ namespace Scales
 	{
 		bool negate = false;
 		bool invert = false;
+		bool toVal = false;
 
 		Token t = lexer->peekToken();
 		if(t.is(Token::TT_OPERATOR,"-"))
@@ -1237,6 +1262,11 @@ namespace Scales
 		}else if(t.is(Token::TT_OPERATOR,"!"))
 		{
 			invert = true;
+			lexer->readToken();
+
+		}else if(t.is(Token::TT_OPERATOR,"$"))
+		{
+			toVal = true;
 			lexer->readToken();
 		}
 
@@ -1262,6 +1292,13 @@ namespace Scales
 			writeASM("INVERT");
 
 			info = ExpressionInfo(DataType::INT, info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
+		}
+
+		if(toVal)
+		{
+			writeASM("DEREFER");
+
+			info = ExpressionInfo(info.getType(), info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //TODO: I have a bad feeling about this. Maybe re-think if all the values are correct
 		}
 
 		return info;
@@ -1308,7 +1345,7 @@ namespace Scales
 					error("Specifier of given object type points to non-existent script '" + info.getType().toString() + "'", member.getLine());
 				}
 
-				Variable *v = s->getGlobal(member.getLexem()); //No need to access locals
+				VariablePrototype *v = s->getGlobal(member.getLexem()); //No need to access locals
 				if(v == null)
 				{
 					//No need to check for universals here, as they can not be referenced through objects
@@ -1371,7 +1408,7 @@ namespace Scales
 
             }else if(t2.is(Token::TT_OPERATOR, "["))
             {
-            	Variable *v = getVariableInScript(currentScript, t.getLexem());
+            	VariablePrototype *v = getVariableInScript(currentScript, t.getLexem());
 
             	lexer->readToken();
 
@@ -1389,7 +1426,7 @@ namespace Scales
 
             }else
             {
-                Variable *v = getVariableInScript(currentScript, t.getLexem());
+            	VariablePrototype *v = getVariableInScript(currentScript, t.getLexem());
 
 				if(v == null)
 				{
@@ -1570,9 +1607,9 @@ namespace Scales
     	return ArrayType(&type, elementCount);
     }*/
 
-    Variable *Compiler::getVariableInScript(Script *s, const String &name)
+    VariablePrototype *Compiler::getVariableInScript(Script *s, const String &name)
     {
-    	Variable *v = s->getLocal(name);
+    	VariablePrototype *v = s->getLocal(name);
 
 		if(v == null)
 		{
@@ -1618,7 +1655,7 @@ namespace Scales
 
     bool Compiler::isAccessModifier(const Token &t)
     {
-    	return t.is(Token::TT_KEYWORD, "public") || t.is(Token::TT_KEYWORD, "private") || t.is(Token::TT_KEYWORD, "universal");
+    	return t.is(Token::TT_KEYWORD, "public") || t.is(Token::TT_KEYWORD, "private");
     }
 
     bool Compiler::isPrimitive(const Token &t)
@@ -1650,13 +1687,6 @@ namespace Scales
     uint32_t Compiler::getNewUID()
     {
     	return ++lastUID;
-    }
-
-    void Compiler::writeASM(const String &s)
-    {
-    	#ifdef SCALES_COMPILER_WRITEASM
-    	std::cout << s << std::endl; //TODO: This function should not occupy a single byte in the final program when macro is not defined
-    	#endif
     }
 
     void Compiler::error(const String &s, int line)
@@ -1740,7 +1770,8 @@ namespace Scales
 			".",
 			",",
 			";",
-			":"
+			":",
+			"$"
 	};
 	const uint32_t Compiler::OPERATOR_COUNT = sizeof(OPERATORS)/sizeof(String);
 

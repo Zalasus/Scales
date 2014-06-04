@@ -148,7 +148,7 @@ namespace Scales
 
 	size_t String::hashCode() const
 	{
-		size_t h;
+		size_t h = 0;
 
 		for (int i = 0; i < len; i++)
 		{

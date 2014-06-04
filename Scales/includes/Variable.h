@@ -10,14 +10,18 @@ namespace Scales
 	class Value
 	{
 
+	public:
+
+		DataType getType();
+
 	};
 
-    class Variable
+    class VariablePrototype
     {
 
     public:
 
-    		Variable(const String &pName, const DataType &pType, const AccessType &pAccessType);
+			VariablePrototype(const String &pName, const DataType &pType, const AccessType &pAccessType);
 
         	String getName() const;
 

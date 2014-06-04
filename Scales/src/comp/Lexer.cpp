@@ -187,7 +187,7 @@ namespace Scales
 			lexerError("Unexpected character");
 		}
 
-    	return Token(Token::TT_EOF, "", currentIndex, currentIndex, currentLine);
+    	return Token(Token::TT_EOF, "EOF", currentIndex, currentIndex, currentLine);
     }
 
 

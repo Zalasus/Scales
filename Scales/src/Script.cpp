@@ -19,25 +19,29 @@ namespace Scales
 	{
 	}
 
+	Value ScriptInstance::callFunction(const String &name, const vector<Value> &parameter)
+	{
+		return Value();
+	}
 
 	//public class Function
 
-	Function::Function(const String &pName, const vector<DataType> parameterTypes, DataType pReturnType, AccessType pAccessType, bool pNative, bool pEvent, uint32_t pAdress)
+	Function::Function(const String &pName, const vector<DataType> &parameterTypes, const DataType &pReturnType, const AccessType &pAccessType, bool pNative, FunctionType pType, uint32_t pAdress)
 	:
 			functionName(pName),
 			paramTypes(parameterTypes),
 			returnType(pReturnType),
 			accessType(pAccessType),
 			native(pNative),
-			event(pEvent),
+			type(pType),
 			adress(pAdress)
 	{
 
 	}
 
-	bool Function::isEvent() const
+	Function::FunctionType Function::getType() const
 	{
-		return event;
+		return type;
 	}
 
 	bool Function::isNative() const
@@ -130,27 +134,30 @@ namespace Scales
 		return null;
 	}
 
-	void Script::declareGlobal(Variable &v)
+	void Script::declareGlobal(VariablePrototype &v)
 	{
 		globals.push_back(v);
 	}
 
-	void Script::declareLocal(Variable &v)
+	void Script::declareLocal(VariablePrototype &v)
 	{
 		v.setScope(currentLocalScope);
 
 		locals.push_back(v);
 	}
 
-	//TODO: Maybe rename everything here so one can easily recognize this stuff is only for prototyping
 	void Script::leaveLocalScope()
 	{
-		for(uint32_t i = 0; i < locals.size(); i++)
+
+		for(vector<VariablePrototype>::iterator it = locals.begin(); it != locals.end();)
 		{
-			if(locals[i].getScope() >= currentLocalScope)
-			{
-				locals.erase(locals.begin() + i);
-			}
+		    if(it->getScope() >= currentLocalScope)
+		    {
+		        it = locals.erase(it);
+		    }else
+		    {
+		        it++;
+		    }
 		}
 
 		if(currentLocalScope > 0)
@@ -162,6 +169,7 @@ namespace Scales
 	void Script::enterLocalScope()
 	{
 		currentLocalScope++;
+
 	}
 
 	void Script::destroyAllLocals()
@@ -170,9 +178,7 @@ namespace Scales
 		currentLocalScope = 0;
 	}
 
-
-	//TODO: Rework this. Variables are not part the script class anymore. they are stored in ScriptInstances, Scripts just contain prototypes
-	Variable *Script::getGlobal(const String &name)
+	VariablePrototype *Script::getGlobal(const String &name)
 	{
 		for(uint32_t i = 0; i < globals.size(); i++)
 		{
@@ -186,12 +192,12 @@ namespace Scales
 		return null;
 	}
 
-	Variable *Script::getLocal(const String &name)
+	VariablePrototype *Script::getLocal(const String &name)
 	{
 		for(uint32_t i = 0; i < locals.size(); i++)
 		{
 
-			if(locals[i].getName().equals(name))
+			if(locals[i].getName().equals(name) && locals[i].getScope() <= currentLocalScope)
 			{
 				return &locals[i];
 			}

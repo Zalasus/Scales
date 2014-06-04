@@ -27,9 +27,61 @@ script Integer
 
 end
 
+script Math
+
+	public func int mod(int a, int mod)
+	
+		return a - (a/mod) * mod; #Since a and mod both are ints, the the division will yield a floored int instead of a float
+	
+	end
+
+end
 
 
 namespace default;
+
+script byValueTest
+
+
+	private func void foo(int i)
+	
+		i = 10;
+	
+	end
+	
+	private func void bar()
+	
+		int j = 5;
+		
+		foo(j);
+		# j is now 10
+		
+		j = 5;
+		
+		foo($j);
+		# j is still 5
+		
+		
+		begin
+			int a = 2;
+			int b = a;
+			
+			a = 5;
+			# both a and b are now 5
+		end
+		
+		begin
+			int a = 2;
+			int b = $a;
+			
+			a = 5;
+			#a is now 5, b is still 2
+		end
+	
+	end
+	
+
+end
 
 script Main
 
@@ -38,8 +90,6 @@ script Main
 	public event main()
 	
 		Util:Integer i = new Util:Integer();
-	
-		i = 100;
 	
 	end
 
