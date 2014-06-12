@@ -12,7 +12,15 @@ namespace Scales
 
 	public:
 
-		DataType getType();
+		Value(const DataType &t);
+
+		DataType getType() const;
+
+		static const Value NULL_VALUE;
+
+	private:
+
+		DataType type;
 
 	};
 

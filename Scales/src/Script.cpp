@@ -12,16 +12,44 @@ namespace Scales
 
 	//public class ScriptInstance
 
-	ScriptInstance::ScriptInstance(const Script &s)
+	ScriptInstance::ScriptInstance(Script &s)
 	:
 			myClass(s),
 			programCounter(0)
 	{
 	}
 
+	void ScriptInstance::initialize()
+	{
+
+	}
+
 	Value ScriptInstance::callFunction(const String &name, const vector<Value> &parameter)
 	{
-		return Value();
+		vector<DataType> paramTypes;
+
+		for(uint32_t i = 0; i < parameter.size(); i++)
+		{
+			DataType type = parameter[i].getType();
+
+			paramTypes.push_back(type);
+		}
+
+		Function *func = myClass.getFunction(name, paramTypes);
+
+		if(func != null)
+		{
+			if(func->getReturnType().equals(DataType::NOTYPE))
+			{
+				return Value::NULL_VALUE;
+
+			}else
+			{
+				return astack[astack.size() - 1];
+			}
+		}
+
+		throw ScalesException(ScalesException::ET_RUNTIME, "Function " + Function::createInfoString(name, paramTypes) + " was not declared in script " + myClass.getIdent().toString());
 	}
 
 	//public class Function
@@ -110,8 +138,35 @@ namespace Scales
 	Script::Script(const ScriptIdent &scriptident)
 	:
 			ident(scriptident),
-			currentLocalScope(0)
+			currentLocalScope(0),
+			bytecode(null),
+			bytecodeLength(0)
 	{
+	}
+
+	Script::Script(const Script &script)
+	:
+			ident(script.getIdent()),
+			currentLocalScope(0),
+			functions(script.functions),
+			globals(script.globals),
+			locals(script.locals)
+	{
+		//copy the scripts bytecode buffer to a new memory block
+
+		bytecodeLength = script.getBytecodeLength();
+
+		bytecode = new uint8_t[bytecodeLength];
+
+		for(uint32_t i = 0; i < bytecodeLength; i++)
+		{
+			bytecode[i] = script.getBytecode()[i];
+		}
+	}
+
+	Script::~Script()
+	{
+		delete[] bytecode;
 	}
 
 	void Script::declareFunction(const Function &func)
@@ -210,6 +265,22 @@ namespace Scales
 	const ScriptIdent &Script::getIdent() const
 	{
 		return ident;
+	}
+
+	void Script::setBytecode(uint8_t *data, uint32_t size)
+	{
+		bytecode = data;
+		bytecodeLength = size;
+	}
+
+	uint8_t *Script::getBytecode() const
+	{
+		return bytecode;
+	}
+
+	uint32_t Script::getBytecodeLength() const
+	{
+		return bytecodeLength;
 	}
 
 }

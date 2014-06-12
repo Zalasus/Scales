@@ -45,16 +45,41 @@ namespace Scales
 		}
 	}
 
+	void ASMStream::writeTString(const String &s)
+	{
+		write(s.length());
+
+		for(int32_t i = 0; i < s.length(); i++)
+		{
+			stream.write(s.charAt(i));
+
+			if(i == 0xFF)
+			{
+				break;
+			}
+		}
+	}
+
+	void ASMStream::writeString(const String &s)
+	{
+		writeUInt(s.length());
+
+		for(int32_t i = 0; i < s.length(); i++)
+		{
+			stream.write(s.charAt(i));
+		}
+	}
+
 	void ASMStream::defineMarker(const String &name, uint32_t adress)
 	{
 		definedMarkers[name] = adress;
 
 		//Check if this marker was already requested. If yes -> write it to its destination
-		for(auto element = requestedMarkers.begin(); element != requestedMarkers.end(); ++element)
+		for(auto it = requestedMarkers.begin(); it != requestedMarkers.end();)
 		{
-			if(element->second.equals(name))
+			if(it->second.equals(name))
 			{
-				uint32_t adr = element->first;
+				uint32_t adr = it->first;
 
 				if(adr < stream.size()-3)
 				{
@@ -65,16 +90,17 @@ namespace Scales
 
 				}//else fatal error
 
-				//erase element from requested-marker-list
-				requestedMarkers.erase(adr);
+				it = requestedMarkers.erase(it);
+			}else
+			{
+				it++;
 			}
 		}
-
 	}
 
 	void ASMStream::defineMarker(const String &name)
 	{
-		definedMarkers[name] = stream.size();
+		defineMarker(name, stream.size());
 	}
 
 	void ASMStream::writeMarker(const String &name)
@@ -94,13 +120,21 @@ namespace Scales
 
 	}
 
+	void ASMStream::reset()
+	{
+		stream.reset();
+
+		definedMarkers.clear();
+		requestedMarkers.clear();
+	}
+
+	bool ASMStream::hasUndefinedMarkers()
+	{
+		return (requestedMarkers.size() > 0);
+	}
+
 	uint8_t *ASMStream::getBytecode()
 	{
-		if(requestedMarkers.size() > 0)
-		{
-			//TODO: Error! Undefined markers were used
-		}
-
 		return stream.getBuffer();
 	}
 
@@ -109,5 +143,29 @@ namespace Scales
 		return stream.size();
 	}
 
+	ByteArrayOutputStream &ASMStream::getStream()
+	{
+		return stream;
+	}
 
+	ASMStream &ASMStream::operator<<(Opcode op)
+	{
+		write(op);
+
+		return *this;
+	}
+
+	ASMStream &ASMStream::operator<<(const String &s)
+	{
+		writeString(s);
+
+		return *this;
+	}
+
+	ASMStream &ASMStream::operator<<(uint32_t i)
+	{
+		writeUInt(i);
+
+		return *this;
+	}
 }

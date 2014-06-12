@@ -13,15 +13,24 @@
 namespace Scales
 {
 
-	class Exception
+	class ScalesException
 	{
 	public:
-		Exception(String msg);
+
+		enum ExceptionType
+		{
+			ET_COMPILER,
+			ET_RUNTIME
+		};
+
+		ScalesException(ExceptionType t, String msg);
 
 		String getMessage();
+		ExceptionType getType();
 
 	private:
 
+		ExceptionType type;
 		String message;
 	};
 

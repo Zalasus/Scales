@@ -39,5 +39,4 @@ namespace Scales
 
 		return false;
 	}
-
 }

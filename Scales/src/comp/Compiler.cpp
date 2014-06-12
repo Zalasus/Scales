@@ -1,9 +1,6 @@
 
 #include "comp/Compiler.h"
 
-//TODO: I want this to work from anywhere, so this file has to be compiled before anything that might use this macro
-#define SCALES_COMPILER_WRITEASM
-
 #ifdef SCALES_COMPILER_WRITEASM
 
 	#include <iostream>
@@ -25,13 +22,13 @@ namespace Scales
 
 	//public class compiler
 
-    Compiler::Compiler(istream &in)
+    Compiler::Compiler(istream &in, ScriptSystem &ss)
+    :
+    		scriptSystem(ss),
+    		currentScript(null),
+    		lastUID(0)
     {
     	lexer = new Lexer(in, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true);
-
-    	currentScript = null;
-
-    	lastUID = 0;
     }
 
     Compiler::~Compiler()
@@ -39,14 +36,21 @@ namespace Scales
     	delete lexer;
     }
 
+    String intToHex(uint8_t i)
+    {
+    	const char tab[] = "0123456789abcdef";
+
+    	String s;
+
+    	s += tab[(i/16) % 16];
+    	s += tab[i % 16];
+
+    	return s;
+    }
+
     void Compiler::compile()
     {
     	mainBlock();
-
-
-    	//ExpressionInfo info = expression();
-
-    	//std::cout << "The type of that expression is " << info.getType().getTypeName() << " and it is " << (info.isConstant() ? "constant" : "not constant") << std::endl;
     }
 
     void Compiler::mainBlock()
@@ -94,10 +98,6 @@ namespace Scales
 
 				writeASM("#Namespace set to: " + nspace);
 
-				//asmout.write(0xCB); //Namespace tag
-				//asmout.writeSString(nspace);
-				//asmout.write(0xFE); //End tag
-
 			}else
 			{
 				error("Expected script header or namespace definition, but found: " + t.getLexem(), t.getLine());
@@ -109,12 +109,6 @@ namespace Scales
 
     void Compiler::script(const ScriptIdent &scriptident)
     {
-    	//uint32_t startSize = asmout.getSize();
-
-    	//asmout.write(0xCA); //Class start tag
-    	//asmout.writeSString(scriptident.getScriptname()); //Classname
-    	//asmout.writeMarker("sizeof_script" + scriptident.getScriptname()); //Class bytecode size
-
     	Script scr = Script(scriptident);
     	scriptSystem.declareScript(scr);
 
@@ -130,7 +124,7 @@ namespace Scales
     		if(t.getType() == Token::TT_IDENT) // private variable / left eval
     		{
 
-    			if(scriptSystem.isNamespaceDeclared(t.getLexem()) || (scriptSystem.getScript(ScriptIdent("",t.getLexem())) != null)) //private variable
+    			if(isTypeOrNamespace(t.getLexem())) //private variable
 				{
 
     				variableDec(AccessType::PRIVATE, false, false);
@@ -225,8 +219,13 @@ namespace Scales
 
     	writeASM("#-------Script " + scriptident.getScriptname() + " end");
 
-    	//asmout.write(0xFE); //Script block end
-    	//asmout.defineMarker("sizeof_script" + scriptident.getScriptname(), asmout.getSize() - startSize); //Write script size to marker defined at start
+    	if(asmout.hasUndefinedMarkers())
+		{
+			error("Fatal error: Compiler generated invalid bytecode. Markers were requested but not defined. This is most likely a compiler bug.", 0);
+		}
+
+    	currentScript->setBytecode(asmout.getStream().toNewArray(), asmout.getSize());
+    	asmout.reset();
     }
 
     BlockIdent::BlockType Compiler::functionBlock(const BlockIdent &block, const DataType &returnType)
@@ -240,7 +239,7 @@ namespace Scales
 			if(t.getType() == Token::TT_IDENT) // private variable / left eval
 			{
 
-				if(scriptSystem.isNamespaceDeclared(t.getLexem()) || (scriptSystem.getScript(ScriptIdent("",t.getLexem())) != null)) //private variable
+				if(isTypeOrNamespace(t.getLexem())) //private variable
 				{
 
 					variableDec(AccessType::PRIVATE, false, true);
@@ -265,10 +264,12 @@ namespace Scales
 				uint32_t currentSubBlockUID = getNewUID();
 
 				writeASM("BEGIN");
+				asmout << OP_BEGIN;
 
 				functionBlock(BlockIdent(BlockIdent::BT_SUB, currentSubBlockUID), returnType);
 
 				writeASM("END");
+				asmout << OP_END;
 
 			}else if(t.is(Token::TT_KEYWORD, "return"))
 			{
@@ -302,6 +303,7 @@ namespace Scales
 				}
 
 				writeASM("RETURN");
+				asmout << OP_RETURN;
 
 			}else if(t.is(Token::TT_KEYWORD, "while"))
 			{
@@ -310,6 +312,7 @@ namespace Scales
 				int32_t currentWhileUID = getNewUID();
 
 				writeASM(String("while_uid") + currentWhileUID + "_start:");
+				asmout.defineMarker(String("while_uid") + currentWhileUID + "_start");
 
 				ExpressionInfo info = expression();
 				if(!info.getType().isNumeric())
@@ -318,16 +321,23 @@ namespace Scales
 				}
 
 				writeASM(String("JUMPFALSE while_uid") + currentWhileUID + "_end");
+				asmout << OP_JUMPFALSE;
+				asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
 
 				writeASM("BEGIN");
+				asmout << OP_BEGIN;
 
 				functionBlock(BlockIdent(BlockIdent::BT_WHILE, currentWhileUID), returnType);
 
 				writeASM("END");
+				asmout << OP_END;
 
 				writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
+				asmout << OP_JUMP;
+				asmout.writeMarker(String("while_uid") + currentWhileUID + "_start");
 
 				writeASM(String("while_uid") + currentWhileUID + "_end:");
+				asmout.defineMarker(String("while_uid") + currentWhileUID + "_end");
 
 			}else if(t.is(Token::TT_KEYWORD, "if"))
 			{
@@ -414,12 +424,16 @@ namespace Scales
 		int currentIfUID = getNewUID();
 
 		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
+		asmout << OP_JUMPFALSE;
+		asmout.writeMarker(String("if_uid") + currentIfUID + "_end");
 		writeASM(String("# if_uid") + currentIfUID + "_start:");
 		writeASM("BEGIN");
+		asmout << OP_BEGIN;
 
 		BlockIdent::BlockType bt = functionBlock(BlockIdent(BlockIdent::BT_IF, currentIfUID), returnType);
 
 		writeASM("END");
+		asmout << OP_END;
 
 		if(bt == BlockIdent::BT_ELSE || bt == BlockIdent::BT_ELSEIF)
 		{
@@ -427,6 +441,7 @@ namespace Scales
 		}
 
 		writeASM(String("if_uid") + currentIfUID + "_end:");
+		asmout.defineMarker(String("if_uid") + currentIfUID + "_end");
 
 		if(bt == BlockIdent::BT_ELSE || bt == BlockIdent::BT_ELSEIF)
 		{
@@ -435,16 +450,19 @@ namespace Scales
 			if(bt == BlockIdent::BT_ELSE)
 			{
 				writeASM("BEGIN");
+				asmout << OP_BEGIN;
 
 				functionBlock(BlockIdent(BlockIdent::BT_ELSE, currentIfUID), returnType);
 
 				writeASM("END");
+				asmout << OP_END;
 			}else
 			{
 				ifStatement(returnType);
 			}
 
 			writeASM(String("if_else_uid") + currentIfUID + "_end:");
+			asmout.defineMarker(String("if_else_uid") + currentIfUID + "_end");
 		}
     }
 
@@ -464,6 +482,7 @@ namespace Scales
     		if(!left.getType().equals(DataType::NOTYPE))
     		{
     			writeASM("DISCARD");
+    			asmout << OP_DISCARD;
     		}
 
     		lexer->readToken();
@@ -501,23 +520,29 @@ namespace Scales
 		}else
 		{
 			writeASM("COPY");
+			asmout << OP_COPY;
+
 			type = expression().getType();
 
 			if(t.is(Token::TT_OPERATOR, "+="))
 			{
 				writeASM("ADD");
+				asmout << OP_ADD;
 
 			}else if(t.is(Token::TT_OPERATOR, "-="))
 			{
 				writeASM("SUBTRACT");
+				asmout << OP_SUBTRACT;
 
 			}else if(t.is(Token::TT_OPERATOR, "*="))
 			{
 				writeASM("MULTIPLY");
+				asmout << OP_MULTIPLY;
 
 			}else if(t.is(Token::TT_OPERATOR, "/="))
 			{
 				writeASM("DIVIDE");
+				asmout << OP_DIVIDE;
 
 			}else
 			{
@@ -532,6 +557,7 @@ namespace Scales
 		}
 
 		writeASM("POPREF");
+		asmout << OP_POPREF;
 
 		return type;
 	}
@@ -579,6 +605,11 @@ namespace Scales
 		//Scope is determined by callstack during runtime
 		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)accessType.getTypeID()); //TODO: Object specifier has to be included, oh and also the native flag
 
+		asmout << OP_DECLAREVAR;
+		asmout.writeTString(ident.getLexem());
+		asmout.write(type.getTypeID());
+		asmout.write(accessType.getTypeID());
+
 		if(t.is(Token::TT_OPERATOR, "="))
 		{
 			ExpressionInfo info = expression();
@@ -596,6 +627,7 @@ namespace Scales
 			}
 
 			writeASM("POPVAR '" + ident.getLexem() + "'");
+			asmout << OP_POPVAR;
 
 		}else if(!t.is(Token::TT_OPERATOR, ";"))
 		{
@@ -685,10 +717,18 @@ namespace Scales
 			do
 			{
 				DataType type = dataType();
-
 				paramTypes.push_back(type);
 
+				bool byVal = false;
+
 				t = lexer->readToken();
+				if(t.is(Token::TT_OPERATOR, "$"))
+				{
+					t = lexer->readToken();
+
+					byVal = true;
+				}
+
 				if(t.getType() != Token::TT_IDENT)
 				{
 					error("Expected variable name in parameter list, but found: " + t.getLexem(), t.getLine());
@@ -699,7 +739,8 @@ namespace Scales
 					error("Parameter name '" + t.getLexem() + "' is already occupied by a script/namespace", t.getLine());
 				}
 
-				paramNames.push_back(t.getLexem());
+				//Rather than creating a new vector just for the byVals, we insert the dollar into the varname for later evaluation
+				paramNames.push_back(byVal ? ("$" + t.getLexem()) : t.getLexem());
 
 				t = lexer->readToken();
 
@@ -719,9 +760,6 @@ namespace Scales
 		{
 			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
 		}
-
-		Function func = Function(ident.getLexem(), paramTypes, returnType, accessType, native, type, 0); //TODO: Change adress during assembly
-		currentScript->declareFunction(func);
 
 		if(native)
 		{
@@ -733,7 +771,7 @@ namespace Scales
 
 			return;
 
-			//TODO: Natives also have to be included in bytecode!
+			//TODO: Natives also have to be included in bytecode! And they have to be defined as prototypes!
 		}
 
 		String defInstr;
@@ -741,15 +779,24 @@ namespace Scales
 		if(type == Function::FT_EVENT)
 		{
 			defInstr = String("REGISTEREVENT '") + ident.getLexem() + "'," + (String("") + (int32_t)paramNames.size()) + ",";
+			asmout << OP_REGISTEREVENT;
 
 		}else
 		{
 			defInstr = String("DECLAREFUNC '") + ident.getLexem() + "'," + returnType.getTypeID() + "," + (int)accessType.getTypeID() + "," + (String("") + (int32_t)paramNames.size()) + ",";
+			asmout << OP_DECLAREFUNC;
 		}
+
+		asmout.writeTString(ident.getLexem());
+		asmout.write(returnType.getTypeID());
+		asmout.write(accessType.getTypeID());
+		asmout.write(paramTypes.size());
 
 		for(uint32_t i = 0; i < paramTypes.size(); i++)
 		{
 			defInstr = defInstr + (int32_t)paramTypes[i].getTypeID();
+
+			asmout.write(paramTypes[i].getTypeID());
 
 			if(i < paramTypes.size()-1)
 			{
@@ -760,19 +807,35 @@ namespace Scales
 		int currentFunctionUID = getNewUID();
 
 		defInstr += ",func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start";
-
 		writeASM(defInstr);
+		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start");
 
 		writeASM("JUMP func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
+		asmout << OP_JUMP;
+		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
+
+		//Declare function prototype so it ist available in the scriptsystem
+		Function func = Function(ident.getLexem(), paramTypes, returnType, accessType, native, type, asmout.getSize());
+		currentScript->declareFunction(func);
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start:");
+		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start");
 
 		writeASM("BEGIN");
+		asmout << OP_BEGIN;
 
 		for(int i = paramTypes.size()-1; i >= 0 ; i--)
 		{
 			DataType paraType = paramTypes[i];
 			String paraName = paramNames[i];
+
+			bool byVal = paraName.startsWith("$");
+			if(byVal)
+			{
+				//In the code above we inserted a dollar in front of all byValue parameters. Here we remove it
+
+				paraName = paraName.substring(1,paraName.length());
+			}
 
 			//Declare locals prototypes
 			VariablePrototype v = VariablePrototype(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
@@ -780,8 +843,22 @@ namespace Scales
 
 			//Declare parameter variables...
 			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
+			asmout << OP_DECLAREVAR;
+			asmout.write(paraType.getTypeID());
+			asmout.writeTString(paraName);
+			asmout.write(AccessType::PRIVATE.getTypeID());
+
+			if(byVal)
+			{
+				writeASM("DEREFER");
+
+				asmout << OP_DEREFER;
+			}
+
 			//...and get their values from the stack
 			writeASM("POPVAR '" + paraName + "'");
+			asmout << OP_POPVAR;
+			asmout.writeTString(paraName);
 		}
 
 		functionBlock(BlockIdent(BlockIdent::BT_FUNC,currentFunctionUID), returnType);
@@ -790,114 +867,11 @@ namespace Scales
 		currentScript->destroyAllLocals();
 
 		writeASM("END");
+		asmout << OP_END;
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
+		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
     }
-
-    /*void Compiler::constructorDec(const AccessType &accessType)
-	{
-    	//TODO: Much, much redundant code with functionDec. Find way to merge both funcs
-
-    	lexer->readToken(); //consume constructor recognizer
-		Token t = lexer->readToken();
-
-		if(!t.is(Token::TT_OPERATOR,"("))
-		{
-			error("Expected parameter list after constructor header, but found: " + t.getLexem(), t.getLine());
-		}
-
-		vector<DataType> paramTypes = vector<DataType>();
-		vector<String> paramNames = vector<String>();
-
-		if(!lexer->peekToken().is(Token::TT_OPERATOR,")"))
-		{
-			do
-			{
-
-				DataType type = dataType();
-
-				paramTypes.push_back(type);
-
-				t = lexer->readToken();
-				if(t.getType() != Token::TT_IDENT)
-				{
-					error("Expected variable name in parameter list, but found: " + t.getLexem(), t.getLine());
-				}
-
-				if(scriptSystem.isNamespaceDeclared(t.getLexem()) || (scriptSystem.getScript(ScriptIdent("",t.getLexem())) != null))
-				{
-					error("Parameter name '" + t.getLexem() + "' is already occupied by a script/namespace", t.getLine());
-				}
-
-				paramNames.push_back(t.getLexem());
-
-				t = lexer->readToken();
-
-				if(!(t.is(Token::TT_OPERATOR,",") || (t.is(Token::TT_OPERATOR,")"))))
-				{
-					error("Expected , or closing parentheses in parameter list, but found: " + t.getLexem(), t.getLine());
-				}
-
-			}while(t.is(Token::TT_OPERATOR,","));
-
-		}else
-		{
-			t = lexer->readToken();
-		}
-
-		if(!t.is(Token::TT_OPERATOR,")"))
-		{
-			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
-		}
-
-		String defInstr = String("DECLAREFUNC 'init',") + DataType::NOTYPE.getTypeID() + "," + (int)accessType.getTypeID() + "," + (String("") + (int32_t)paramNames.size()) + ",";
-
-		for(uint32_t i = 0; i < paramTypes.size(); i++)
-		{
-			defInstr = defInstr + (int32_t)paramTypes[i].getTypeID();
-
-			if(i < paramTypes.size()-1)
-			{
-				defInstr += ";";
-			}
-		}
-
-		int currentFunctionUID = getNewUID();
-
-		Function func = Function(String("init"), paramTypes, DataType::NOTYPE, accessType, false, false, 0); //TODO: Change adress during assembly
-		currentScript->declareFunction(func);
-
-		defInstr += String(", constructor_uid") + currentFunctionUID +  "_start";
-
-		writeASM(defInstr);
-
-		writeASM(String("JUMP constructor_uid") + currentFunctionUID + "_end");
-
-		writeASM(String("constructor_uid") + currentFunctionUID +  "_start:");
-
-		writeASM("BEGIN");
-
-		for(int i = paramTypes.size()-1; i >= 0 ; i--)
-		{
-			DataType paraType = paramTypes[i];
-			String paraName = paramNames[i];
-
-			VariablePrototype v = VariablePrototype(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
-			currentScript->declareLocal(v);
-
-			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
-
-			writeASM("POPVAR '" + paraName + "'");
-		}
-
-		functionBlock(BlockIdent(BlockIdent::BT_FUNC,currentFunctionUID), DataType::NOTYPE);
-
-		currentScript->destroyAllLocals();
-
-		writeASM("END");
-
-		writeASM(String("constructor_uid") + currentFunctionUID + "_end:");
-	}*/
 
     DataType Compiler::functionCall(const String &funcName, bool member, const DataType &baseType)
     {
@@ -909,7 +883,7 @@ namespace Scales
 
 		int paramCount = 0;
 
-		vector<DataType> paramTypes = vector<DataType>();
+		vector<DataType> paramTypes;
 
 		t = lexer->peekToken();
 		if(!t.is(Token::TT_OPERATOR,")"))
@@ -943,6 +917,11 @@ namespace Scales
 				error("Only object types have callable member functions, but given type was: " + baseType.toString(), t.getLine());
 			}
 
+			if(baseType.isAbstract())
+			{
+				error("Can not call member functions of abstract object types.", t.getLine());
+			}
+
 			Script *script = scriptSystem.getScript(baseType.getObjectType());
 
 			if(script == null)
@@ -963,6 +942,9 @@ namespace Scales
 			}
 
 			writeASM("CALLMEMBER '" + funcName + "'," + paramCount);
+			asmout << OP_CALLMEMBER;
+			asmout.writeTString(funcName);
+			asmout.write(paramCount);
 
 			return function->getReturnType();
 
@@ -978,6 +960,9 @@ namespace Scales
 			//No need to check for private, as we are calling from the same script
 			
 			writeASM("CALL '" + funcName + "'," + paramCount);
+			asmout << OP_CALL;
+			asmout.writeTString(funcName);
+			asmout.write(paramCount);
 
 			return function->getReturnType();
 		}
@@ -1023,13 +1008,29 @@ namespace Scales
 
     		}else
     		{
-    			if(scriptSystem.getScript(ScriptIdent("", t.getLexem())) == null)
+    			//First, seach in current namespace if no namespace is given
+    			Script *scr = scriptSystem.getScript(ScriptIdent(currentScript->getIdent().getNamespace(), t.getLexem()));
+
+    			if(scr == null)
     			{
-    				error("Identifier '" + t.getLexem() + "' does not name a script in default namespace", t.getLine());
+    				//If not found in current namespace, search usage list
+    				scr = null; //TODO: Seach in usage list here
+
+    				if(scr == null)
+    				{
+    					//If not found in usage list, seach in default namespace
+
+    					scr = scriptSystem.getScript(ScriptIdent("", t.getLexem()));
+
+    					if(scr == null)
+    					{
+    						error("Identifier '" + t.getLexem() + "' does not name a script in current/default namespace", t.getLine());
+    					}
+    				}
     			}
 
     			DataType type = DataType::OBJECT;
-    			type.initObjectType(ScriptIdent("", t.getLexem()));
+    			type.initObjectType(scr->getIdent());
 
     			return type;
     		}
@@ -1040,7 +1041,6 @@ namespace Scales
     	}
 
     	return DataType::NOTYPE; //should never happen
-
     }
 
     ExpressionInfo Compiler::expression(const bool leftEval)
@@ -1068,10 +1068,12 @@ namespace Scales
             if(t.is(Token::TT_OPERATOR,"|"))
             {
                 writeASM("LOGICOR");
+                asmout << OP_LOGICOR;
 
             }else if(t.is(Token::TT_OPERATOR,"&"))
             {
                 writeASM("LOGICAND");
+                asmout << OP_LOGICAND;
             }
 
             t = lexer->peekToken();
@@ -1095,26 +1097,35 @@ namespace Scales
             if(t.is(Token::TT_OPERATOR,"=="))
             {
                 writeASM("COMPARE");
+                asmout << OP_COMPARE;
 
             }else if(t.is(Token::TT_OPERATOR,"<"))
             {
                 writeASM("LESS");
+                asmout << OP_LESS;
 
             }else if(t.is(Token::TT_OPERATOR,">"))
             {
                 writeASM("GREATER");
+                asmout << OP_GREATER;
 
             }else if(t.is(Token::TT_OPERATOR,"<="))
             {
                 writeASM("LESSEQUAL");
+                asmout << OP_LESSEQUAL;
 
             }else if(t.is(Token::TT_OPERATOR,">="))
             {
                 writeASM("GREATEREQUAL");
+                asmout << OP_GREATEREQUAL;
+
             }else if(t.is(Token::TT_OPERATOR,"!="))
             {
                 writeASM("COMPARE");
+                asmout << OP_COMPARE;
+
                 writeASM("INVERT");
+                asmout << OP_INVERT;
             }
 
             t = lexer->peekToken();
@@ -1155,6 +1166,7 @@ namespace Scales
             	}
 
                 writeASM("ADD");
+                asmout << OP_ADD;
 
             }else if(t.is(Token::TT_OPERATOR,"-"))
             {
@@ -1170,7 +1182,8 @@ namespace Scales
 
             	info = ExpressionInfo(DataType::mathCast(info.getType(),rightInfo.getType()), info.isConstant() && rightInfo.isConstant(), ExpressionInfo::FT_MATH_EXPR);
 
-                writeASM("SUBSTRACT");
+                writeASM("SUBTRACT");
+                asmout << OP_SUBTRACT;
             }
 
             t = lexer->peekToken();
@@ -1204,10 +1217,12 @@ namespace Scales
             if(t.is(Token::TT_OPERATOR,"*"))
             {
                 writeASM("MULTIPLY");
+                asmout << OP_MULTIPLY;
 
             }else if(t.is(Token::TT_OPERATOR,"/"))
             {
                 writeASM("DIVIDE");
+                asmout << OP_DIVIDE;
             }
 
             t = lexer->peekToken();
@@ -1235,10 +1250,14 @@ namespace Scales
 			if(type.equals(DataType::OBJECT))
 			{
 				writeASM(String("TOOBJECT '") + type.getObjectType().getNamespace() + "','" + type.getObjectType().getScriptname() + "'");
+				asmout << OP_TOOBJECT;
+				asmout.writeTString(type.getObjectType().getNamespace());
+				asmout.writeTString(type.getObjectType().getScriptname());
 
 			}else
 			{
 				writeASM(String("TO") + type.getTypeName().toUpperCase());
+				asmout << (OP_TOINT + type.getTypeID());
 			}
 
 			return ExpressionInfo(type, false, ExpressionInfo::FT_MATH_EXPR);
@@ -1280,6 +1299,7 @@ namespace Scales
 			}
 
 			writeASM("NEGATE");
+			asmout << OP_NEGATE;
 		}
 
 		if(invert)
@@ -1290,6 +1310,7 @@ namespace Scales
 			}
 
 			writeASM("INVERT");
+			asmout << OP_INVERT;
 
 			info = ExpressionInfo(DataType::INT, info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
 		}
@@ -1297,6 +1318,7 @@ namespace Scales
 		if(toVal)
 		{
 			writeASM("DEREFER");
+			asmout << OP_DEREFER;
 
 			info = ExpressionInfo(info.getType(), info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //TODO: I have a bad feeling about this. Maybe re-think if all the values are correct
 		}
@@ -1314,6 +1336,11 @@ namespace Scales
         	if(info.getType().getTypeID() != DataType::OBJECT.getTypeID())
 			{
 				error("Only object types have accessible members, but given type is: " + info.getType().toString(), t.getLine());
+			}
+
+        	if(info.getType().isAbstract())
+			{
+				error("Can not access members of abstract object types.", t.getLine());
 			}
 
             lexer->readToken();
@@ -1363,6 +1390,8 @@ namespace Scales
                 info = ExpressionInfo(v->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
 
                 writeASM("GETMEMBER '" + member.getLexem() + "'");
+                asmout << OP_GETMEMBER;
+                asmout.writeTString(member.getLexem());
             }
         }
 
@@ -1383,12 +1412,16 @@ namespace Scales
             }
 
             writeASM("PUSH" + numberType.getTypeName().toUpperCase() + " " + t.getLexem());
+            asmout << OP_PUSHINT + numberType.getTypeID();
+            //TODO: Write the correct number literal to bytecode here
 
             return ExpressionInfo(numberType, true, ExpressionInfo::FT_LITERAL);
 
         }else if(t.getType() == Token::TT_STRING)
         {
             writeASM("PUSHSTRING '" + escapeASMChars(t.getLexem()) + "'");
+            asmout << OP_PUSHSTRING;
+            asmout.writeString(t.getLexem()); //TODO: Process escape sequences here
 
            return ExpressionInfo(DataType::STRING, true, ExpressionInfo::FT_LITERAL);
 
@@ -1415,6 +1448,7 @@ namespace Scales
             	expression();
 
             	writeASM("GETINDEX");
+            	asmout << OP_GETINDEX;
 
             	t2 = lexer->readToken();
 				if(!t2.is(Token::TT_OPERATOR, "]"))
@@ -1434,6 +1468,8 @@ namespace Scales
 				}
 
                 writeASM("PUSHVAR '" + t.getLexem() + "'");
+                asmout << OP_PUSHVAR;
+                asmout.writeTString(t.getLexem());
 
                 return ExpressionInfo(v->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
             }
@@ -1470,6 +1506,11 @@ namespace Scales
             {
             	error("Expected object type identifier after new keyword, but found: " + scripttype.getTypeName(), t.getLine());
             }
+
+            if(scripttype.isAbstract())
+			{
+				error("Can not instantiate abstract objects.", t.getLine());
+			}
 
 			Token t2 = lexer->readToken();
 			if(!t2.is(Token::TT_OPERATOR,"("))
@@ -1526,6 +1567,10 @@ namespace Scales
 				}
 			
 				writeASM("NEW '" + scripttype.getObjectType().getNamespace() + "','" + scripttype.getObjectType().getScriptname() + "'," + paramCount);
+				asmout << OP_NEW;
+				asmout.writeTString(scripttype.getObjectType().getNamespace());
+				asmout.writeTString(scripttype.getObjectType().getScriptname());
+				asmout.write(paramCount);
 			}
 
 			return ExpressionInfo(scripttype, false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are considered as functions for now
@@ -1533,6 +1578,7 @@ namespace Scales
         }else if(t.is(Token::TT_KEYWORD,"null"))
         {
             writeASM("PUSHNULL");
+            asmout << OP_PUSHNULL;
 
             return ExpressionInfo(DataType::OBJECT, true, ExpressionInfo::FT_LITERAL); //TODO: Re-think if NULL is really an object
 
@@ -1554,6 +1600,7 @@ namespace Scales
         	{
 
         		writeASM("PUSHTHIS");
+        		asmout << OP_PUSHTHIS;
 
         		DataType type = DataType::OBJECT;
         		type.initObjectType(currentScript->getIdent());
@@ -1677,6 +1724,13 @@ namespace Scales
     	return false;
     }
 
+    bool Compiler::isTypeOrNamespace(const String &s)
+    {
+    	return scriptSystem.isNamespaceDeclared(s) ||
+    			scriptSystem.getScript(ScriptIdent(currentScript->getIdent().getNamespace(), s)) != null ||
+    			scriptSystem.getScript(ScriptIdent("",s)) != null;
+    }
+
     String Compiler::escapeASMChars(const String &s)
     {
     	//TODO: Do useful stuff here
@@ -1693,9 +1747,9 @@ namespace Scales
     {
     	//TODO: Do more stuff with the error message than just throwing an exception
 
-    	throw Exception(String("Error in line ") + line + ": " + s);
+    	throw ScalesException(ScalesException::ET_COMPILER, String("Error in line ") + line + ": " + s);
     }
-
+	
     const String Compiler::KEYWORDS[] =
 	{
 			"namespace",
@@ -1730,7 +1784,8 @@ namespace Scales
 			"long",
 			"float",
 			"double",
-			"string"
+			"string",
+			"object"
 	};
 	const uint32_t Compiler::KEYWORD_COUNT = sizeof(KEYWORDS)/sizeof(String);
 
@@ -1740,7 +1795,8 @@ namespace Scales
 			"long",
 			"float",
 			"double",
-			"string"
+			"string",
+			"object"
 	};
 	const uint32_t Compiler::DATATYPE_COUNT = sizeof(DATATYPES)/sizeof(String);
 

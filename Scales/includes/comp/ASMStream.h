@@ -9,6 +9,7 @@
 #define ASMSTREAM_H_
 
 #include "Nein.h"
+#include "Bytecode.h"
 
 #include <unordered_map>
 
@@ -24,15 +25,26 @@ namespace Scales
 		void write(uint8_t b);
 		void writeUShort(uint16_t s);
 		void writeUInt(uint32_t i);
+		void writeString(const String &s);
 		void writeSString(const String &s);
+		void writeTString(const String &s);
 
 		void defineMarker(const String &name, uint32_t adress);
 		void defineMarker(const String &name);
 
 		void writeMarker(const String &name);
 
+		void reset();
+
+		bool hasUndefinedMarkers();
+
 		uint8_t *getBytecode();
 		uint32_t getSize();
+		ByteArrayOutputStream &getStream();
+
+		ASMStream &operator<<(Opcode op);
+		ASMStream &operator<<(const String &s);
+		ASMStream &operator<<(uint32_t i);
 
 	private:
 

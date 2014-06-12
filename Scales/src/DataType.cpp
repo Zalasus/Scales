@@ -10,6 +10,10 @@ namespace Scales
 	{
 	}
 
+	ScriptIdent::ScriptIdent(String pSname) : nspace(""), sname(pSname)
+	{
+	}
+
 	const String &ScriptIdent::getNamespace() const
 	{
 		return nspace;
@@ -98,6 +102,11 @@ namespace Scales
         return !(typeID & 0xFC); //Bits 2-7 have to be 0 for numeric types
     }
 
+    bool DataType::isAbstract() const
+    {
+    	return (typeID == OBJECT.getTypeID() && objectType.getScriptname().isEmpty());
+    }
+
     bool DataType::canCastImplicitlyTo(const DataType &t)
     {
     	if(isNumeric() && t.isNumeric())
@@ -106,6 +115,11 @@ namespace Scales
     		// -> Mask out all bits of b that are zero in a and look if the result is equal a
 			return (getTypeID() & t.getTypeID()) == getTypeID();
 		}
+
+    	if(typeID == OBJECT.getTypeID() && t.isAbstract())
+    	{
+    		return true; //All object types may be implicitly cast to abstract object
+    	}
 
     	return equals(t); //No other types are implicitly castable, except they are equal
     }
@@ -124,7 +138,14 @@ namespace Scales
     {
     	if(typeID == DataType::OBJECT.getTypeID())
     	{
-    		return objectType.toString();
+    		if(isAbstract())
+    		{
+    			return String("abstract object");
+
+    		}else
+    		{
+    			return objectType.toString();
+    		}
     	}
 
     	return typeName;

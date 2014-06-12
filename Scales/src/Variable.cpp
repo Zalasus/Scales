@@ -11,6 +11,21 @@
 namespace Scales
 {
 
+	//public class Value
+
+	Value::Value(const DataType &t)
+	:
+			type(t)
+	{
+	}
+
+	DataType Value::getType() const
+	{
+		return type;
+	}
+
+	const Value Value::NULL_VALUE = Value(DataType::NOTYPE);
+
 	VariablePrototype::VariablePrototype(const String &pName, const DataType &pType, const AccessType &pAccessType)
 	:
 			name(pName),

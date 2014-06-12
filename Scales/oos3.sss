@@ -1,5 +1,14 @@
 
 
+namespace System;
+
+script Out
+
+	public func void println(string s)
+	
+	end
+
+end
 
 namespace Util;
 
@@ -29,6 +38,9 @@ end
 
 script Math
 
+	private object o = new Integer();
+	private int i = (o -> Integer).getValue();
+
 	public func int mod(int a, int mod)
 	
 		return a - (a/mod) * mod; #Since a and mod both are ints, the the division will yield a floored int instead of a float
@@ -41,7 +53,6 @@ end
 namespace default;
 
 script byValueTest
-
 
 	private func void foo(int i)
 	
@@ -93,7 +104,29 @@ script Main
 	
 	end
 
+
+	public func void foo()
+	
+	end
+	
+	public func int boo()
+	
+	end
+	
+	public func void xyz()
+	
+		foo();
+		
+		boo();
+		
+		int i = boo();
+		
+		#i = foo();
+	
+	end
+
 	i = 1234;
 
 end 
+
 

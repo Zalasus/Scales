@@ -556,6 +556,10 @@ namespace Scales
 		count = 0;
 	}
 
+	/**
+	 * Copies the buffer to a new memory block including only the cells that were written to.
+	 * The stream does not take care of cleaning up the ressources created by this method.
+	 */
 	uint8_t *ByteArrayOutputStream::toNewArray()
 	{
 		uint8_t *newBuffer = new uint8_t[count];
@@ -568,6 +572,10 @@ namespace Scales
 		return newBuffer;
 	}
 
+	/**
+	 * Copies the buffer to a new memory block including all allocated cells.
+	 * The stream does not take care of cleaning up the ressources created by this method.
+	 */
 	uint8_t *ByteArrayOutputStream::newBufferCopy()
 	{
 		uint8_t *newBuffer = new uint8_t[bufferSize];

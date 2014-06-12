@@ -94,6 +94,7 @@ namespace Scales
 	public:
 
 		ScriptIdent(String pNspace, String pSname);
+		ScriptIdent(String pSname);
 
 		const String &getNamespace() const;
 		const String &getScriptname() const;
@@ -131,6 +132,8 @@ namespace Scales
 
         bool isNumeric() const;
         bool equals(const DataType &t) const;
+
+        bool isAbstract() const;
 
         bool canCastImplicitlyTo(const DataType &t);
 

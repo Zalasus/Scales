@@ -1,6 +1,6 @@
 
 #include "comp/Lexer.h"
-#include "comp/Exception.h"
+#include "Exception.h"
 #include "Nein.h"
 
 #include <cstdio>
@@ -330,7 +330,7 @@ namespace Scales
 
     void Lexer::lexerError(const String &msg)
     {
-    	throw Exception(String("Lexer error in line ") + (int)currentLine + ": " + msg);
+    	throw ScalesException(ScalesException::ET_COMPILER, String("Lexer error in line ") + (int)currentLine + ": " + msg);
     }
 
     void Lexer::lexerError(const char* msg)

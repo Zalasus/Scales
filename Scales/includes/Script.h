@@ -15,6 +15,8 @@
 #include "DataType.h"
 #include "Variable.h"
 
+#include "Exception.h"
+
 using std::vector;
 
 namespace Scales
@@ -64,6 +66,8 @@ namespace Scales
 	{
 	public:
 		Script(const ScriptIdent &scriptident);
+		Script(const Script &script);
+		~Script();
 
 		void declareFunction(const Function &func);
 		Function *getFunction(const String &name, const vector<DataType> &paramTypes);
@@ -80,6 +84,10 @@ namespace Scales
 
 		const ScriptIdent &getIdent() const;
 
+		void setBytecode(uint8_t *data, uint32_t size);
+		uint8_t *getBytecode() const;
+		uint32_t getBytecodeLength() const;
+
 	private:
 
 		const ScriptIdent ident;
@@ -90,6 +98,9 @@ namespace Scales
 
 		vector<VariablePrototype> globals;
 		vector<VariablePrototype> locals;
+
+		uint8_t *bytecode;
+		uint32_t bytecodeLength;
 	};
 
 
@@ -97,7 +108,7 @@ namespace Scales
 	{
 	public:
 
-		ScriptInstance(const Script &s);
+		ScriptInstance(Script &s);
 
 		void initialize();
 
@@ -108,7 +119,7 @@ namespace Scales
 		void run();
 
 
-		const Script &myClass;
+		Script &myClass;
 
 		uint32_t programCounter;
 

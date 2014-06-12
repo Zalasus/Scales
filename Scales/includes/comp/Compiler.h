@@ -82,7 +82,7 @@ namespace Scales
     {
     public:
 
-        Compiler(istream &in);
+        Compiler(istream &in, ScriptSystem &ss);
 
         ~Compiler();
 
@@ -92,7 +92,7 @@ namespace Scales
 
         Lexer *lexer;
 
-        ScriptSystem scriptSystem;
+        ScriptSystem &scriptSystem;
         Script *currentScript;
 
         uint32_t lastUID;
@@ -141,6 +141,7 @@ namespace Scales
         bool isAccessModifier(const Token &t);
 
         bool isPrimitive(const Token &t);
+        bool isTypeOrNamespace(const String &t);
 
         void error(const String &message, int line);
 
