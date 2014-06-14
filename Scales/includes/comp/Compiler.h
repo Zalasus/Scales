@@ -106,10 +106,10 @@ namespace Scales
         void leftEval();
         DataType rightEval();
 
-        void functionDec(const AccessType &accessType, bool native);
-        void constructorDec(const AccessType &accessType);
+        void functionDec(bool priv, bool native);
+        void constructorDec(bool priv);
 
-        void variableDec(const AccessType &accessType, bool native, bool local);
+        void variableDec(bool priv, bool native, bool local);
 
         DataType dataType();
 
@@ -131,6 +131,7 @@ namespace Scales
         uint32_t getNewUID();
 
         VariablePrototype *getVariableInScript(Script *s, const String &name);
+        void writeDatatypeToBytecode(const DataType &t);
 
         bool isLogicOp(const Token &t);
         bool isRelationalOp(const Token &t);

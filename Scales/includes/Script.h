@@ -33,13 +33,13 @@ namespace Scales
 			FT_EVENT
 		};
 
-		Function(const String &name, const vector<DataType> &paramTypes, const DataType &returnType, const AccessType &accessType, bool native, FunctionType type, uint32_t adress);
+		Function(const String &name, const vector<DataType> &paramTypes, const DataType &returnType, bool pPriv, bool native, FunctionType type, uint32_t adress);
 
 		bool isNative() const;
 		FunctionType getType() const;
 		const String &getName() const;
 		const DataType &getReturnType() const;
-		const AccessType &getAccessType() const;
+		bool isPrivate() const;
 
 		bool is(const String &name, const vector<DataType> &paramTypes) const;
 
@@ -52,8 +52,8 @@ namespace Scales
 		String functionName;
 		vector<DataType> paramTypes;
 		DataType returnType;
-		AccessType accessType;
 
+		bool priv;
 		bool native;
 
 		FunctionType type;

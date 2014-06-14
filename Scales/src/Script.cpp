@@ -54,12 +54,12 @@ namespace Scales
 
 	//public class Function
 
-	Function::Function(const String &pName, const vector<DataType> &parameterTypes, const DataType &pReturnType, const AccessType &pAccessType, bool pNative, FunctionType pType, uint32_t pAdress)
+	Function::Function(const String &pName, const vector<DataType> &parameterTypes, const DataType &pReturnType, bool pPriv, bool pNative, FunctionType pType, uint32_t pAdress)
 	:
 			functionName(pName),
 			paramTypes(parameterTypes),
 			returnType(pReturnType),
-			accessType(pAccessType),
+			priv(pPriv),
 			native(pNative),
 			type(pType),
 			adress(pAdress)
@@ -87,9 +87,9 @@ namespace Scales
 		return returnType;
 	}
 
-	const AccessType &Function::getAccessType() const
+	bool Function::isPrivate() const
 	{
-		return accessType;
+		return priv;
 	}
 
 	const String &Function::getName() const

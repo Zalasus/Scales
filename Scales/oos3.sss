@@ -1,5 +1,4 @@
 
-
 namespace System;
 
 script Out
@@ -41,6 +40,8 @@ script Math
 	private object o = new Integer();
 	private int i = (o -> Integer).getValue();
 
+	private object o2 = i -> object;
+
 	public func int mod(int a, int mod)
 	
 		return a - (a/mod) * mod; #Since a and mod both are ints, the the division will yield a floored int instead of a float
@@ -60,6 +61,12 @@ script byValueTest
 	
 	end
 	
+	private func void fooByVal(int $i)
+	
+		i = 10;
+	
+	end
+	
 	private func void bar()
 	
 		int j = 5;
@@ -72,6 +79,8 @@ script byValueTest
 		foo($j);
 		# j is still 5
 		
+		fooByVal(j);
+		#j is still 5
 		
 		begin
 			int a = 2;

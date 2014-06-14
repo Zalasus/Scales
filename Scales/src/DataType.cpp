@@ -102,9 +102,9 @@ namespace Scales
         return !(typeID & 0xFC); //Bits 2-7 have to be 0 for numeric types
     }
 
-    bool DataType::isAbstract() const
+    bool DataType::isArray() const
     {
-    	return (typeID == OBJECT.getTypeID() && objectType.getScriptname().isEmpty());
+    	return false; //TODO: implement arrays
     }
 
     bool DataType::canCastImplicitlyTo(const DataType &t)
@@ -116,7 +116,7 @@ namespace Scales
 			return (getTypeID() & t.getTypeID()) == getTypeID();
 		}
 
-    	if(typeID == OBJECT.getTypeID() && t.isAbstract())
+    	if(typeID == OBJECT.getTypeID() && t.getTypeID() == ABSTRACT_OBJECT.getTypeID())
     	{
     		return true; //All object types may be implicitly cast to abstract object
     	}
@@ -138,17 +138,18 @@ namespace Scales
     {
     	if(typeID == DataType::OBJECT.getTypeID())
     	{
-    		if(isAbstract())
-    		{
-    			return String("abstract object");
 
-    		}else
-    		{
-    			return objectType.toString();
-    		}
+    		return objectType.toString();
+
+    	}else if(typeID == DataType::ABSTRACT_OBJECT.getTypeID())
+    	{
+
+    		return String("abstract object");
+
+    	}else
+    	{
+    		return typeName;
     	}
-
-    	return typeName;
     }
 
     /*
@@ -219,14 +220,15 @@ namespace Scales
     const DataType DataType::LONG(1, String("long"));
     const DataType DataType::FLOAT(2, String("float"));
     const DataType DataType::DOUBLE(3, String("double"));
-    const DataType DataType::STRING(5, String("string"));
-    const DataType DataType::OBJECT(6, String("object"));
+    const DataType DataType::STRING(4, String("string"));
+    const DataType DataType::OBJECT(5, String("<furries rule!>"));
+    const DataType DataType::ABSTRACT_OBJECT(6, String("object"));
 
 
 
     //public class AccessType
 
-    //TODO: There are only two access types. Reduce this to a simple byte value
+   /* //TODO: There are only two access types. Reduce this to a simple byte value
     AccessType::AccessType(uint8_t id, const String &name)
 	{
 	   typeID = id;
@@ -297,5 +299,5 @@ namespace Scales
 	vector<AccessType> AccessType::values;
 
 	const AccessType AccessType::PRIVATE(0, String("private"));
-	const AccessType AccessType::PUBLIC(1, String("public"));
+	const AccessType AccessType::PUBLIC(1, String("public"));*/
 }

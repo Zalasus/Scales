@@ -122,6 +122,7 @@ namespace Scales
         static const DataType DOUBLE;
         static const DataType STRING;
         static const DataType OBJECT;
+        static const DataType ABSTRACT_OBJECT;
 
         DataType(const DataType &t);
 
@@ -133,7 +134,7 @@ namespace Scales
         bool isNumeric() const;
         bool equals(const DataType &t) const;
 
-        bool isAbstract() const;
+        bool isArray() const;
 
         bool canCastImplicitlyTo(const DataType &t);
 
@@ -161,7 +162,7 @@ namespace Scales
     };
 
 
-    class AccessType
+    /*class AccessType
     {
 
     public:
@@ -189,7 +190,7 @@ namespace Scales
             String typeName;
 
             static vector<AccessType> values;
-    };
+    };*/
 
 }
 

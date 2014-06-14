@@ -26,11 +26,11 @@ namespace Scales
 
 	const Value Value::NULL_VALUE = Value(DataType::NOTYPE);
 
-	VariablePrototype::VariablePrototype(const String &pName, const DataType &pType, const AccessType &pAccessType)
+	VariablePrototype::VariablePrototype(const String &pName, const DataType &pType, bool pPriv)
 	:
 			name(pName),
 			type(pType),
-			accessType(pAccessType),
+			priv(pPriv),
 			scope(0)
 	{
 
@@ -46,9 +46,9 @@ namespace Scales
 		return type;
 	}
 
-	AccessType VariablePrototype::getAccessType() const
+	bool VariablePrototype::isPrivate() const
 	{
-		return accessType;
+		return priv;
 	}
 
 	void VariablePrototype::setScope(uint32_t i)

@@ -1,0 +1,195 @@
+
+
+
+bytecode element types
+----------------------
+
+datatype:
+	byte: type ID
+		bit 0: big type (for numericals only)				]
+		bit 1: floating point type (for numericals only)	]- base type identifier
+		bit 2: numerical type								]
+		bit 3: array
+	tstring: namespace (if base type identifier is non-abstract object)
+	tstring: scriptname (if base type identifier is non-abstract object)
+	
+	base type ids:
+		int = 0
+		long = 1
+		float = 2
+		double = 3
+		string = 4
+		non-abstract object = 5
+		abstract object = 6
+		reserved type = 7 
+		
+	a type ID of 255 stands for void in function return type declarations. it is invalid everywhere else.
+	
+
+opcodes
+-------
+
+NOP = 0
+	No params
+	
+	
+DECLAREVAR = 1
+	tstring: name
+	byte: flags
+		bit 0: native (ignored by locals)
+		bit 1: private
+	datatype: variable type
+	
+
+NEW = 4
+	tstring: namespace
+	tstring: scriptname
+	byte: constructor parameter count
+
+
+DECLAREFUNC = 6
+	tstring: function name
+	byte: flags
+		bit 0: native
+		bit 1: private
+	datatype: return type (255 for void)
+	byte: parameter count
+	datatype[]: parameter types
+		
+		
+REGISTEREVENT = 7
+	tstring: event name
+	byte: flags
+		bit 0: native
+	byte: parameter count
+	datatype[]: parameter types
+	
+	
+PUSHVAR = 10
+	tstring: variable name
+	
+POPVAR = 12
+	tstring: variable name
+
+ADD = 13
+	no params
+	
+SUBTRACT = 14
+	no params
+	
+MULTIPLY = 15
+	no params
+	
+DIVIDE = 16
+	no params
+	
+NEGATE = 17
+	no params
+
+COMPARE = 18
+	no params
+	
+INVERT = 19
+	no params
+	
+LESS = 20
+	no params
+	
+GREATER = 21
+	no params
+	
+LESSEQUAL = 22
+	no params
+	
+GREATEREQUAL = 23
+	no params
+	
+LOGICOR = 24
+	no params
+	
+LOGICAND = 25
+	no params
+	
+GETMEMBER = 28
+	tstring: member name
+	
+COPY = 30
+	no params
+
+JUMP = 35
+	int: adress
+	
+JUMPFALSE = 37
+	int: adress
+	
+CALL = 38
+	tstring: function name
+	byte: parameter count
+	
+RETURN = 39
+	no params
+	
+BEGIN = 40
+	no params
+	
+END = 41
+	no params
+	
+CALLMEMBER = 44
+	tstring: member function name
+	byte: parameter count
+
+GETINDEX = 50
+	no params
+
+TOINT = 60
+	no params
+	
+TOLONG = 61
+	no params
+	
+TOFLOAT = 62
+	no params
+	
+TODOUBLE = 63
+	no params
+	
+TOSTRING = 64
+	no params
+	
+TOOBJECTINSTANCE = 65
+	tstring: namespace
+	tstring: scriptname
+	
+TOOBJECT = 66
+	no params
+
+PUSHINT = 70
+	int: value
+	
+PUSHLONG = 71
+	long: value
+	
+PUSHFLOAT = 72
+	float: value
+	
+PUSHDOUBLE = 73
+	double: value
+	
+PUSHSTRING = 74
+	string: value
+
+DEREFER = 80
+	no params
+	
+POPREF = 85
+	no params
+
+PUSHNULL = 90
+	no params
+	
+DISCARD = 91
+	no params
+	
+PUSHTHIS = 92
+	no params

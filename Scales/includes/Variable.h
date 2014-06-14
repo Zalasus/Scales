@@ -29,13 +29,13 @@ namespace Scales
 
     public:
 
-			VariablePrototype(const String &pName, const DataType &pType, const AccessType &pAccessType);
+			VariablePrototype(const String &pName, const DataType &pType, bool pPriv);
 
         	String getName() const;
 
         	DataType getType() const;
 
-        	AccessType getAccessType() const;
+        	bool isPrivate() const;
 
         	void setScope(uint32_t i);
         	uint32_t getScope() const;
@@ -44,7 +44,7 @@ namespace Scales
 
         	String name;
         	DataType type;
-        	AccessType accessType;
+        	bool priv;
 
         	uint32_t scope;
 

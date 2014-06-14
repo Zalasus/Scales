@@ -127,7 +127,7 @@ namespace Scales
     			if(isTypeOrNamespace(t.getLexem())) //private variable
 				{
 
-    				variableDec(AccessType::PRIVATE, false, false);
+    				variableDec(true, false, false);
 
 				}else
 				{
@@ -136,12 +136,12 @@ namespace Scales
 
     		}else if(isPrimitive(t)) //private variable
     		{
-    			variableDec(AccessType::PRIVATE, false, false);
+    			variableDec(true, false, false); //private, native, local
 
     		}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event") || t.is(Token::TT_KEYWORD, "init")) //private function / private event /private constructor
     		{
 
-    			functionDec(AccessType::PRIVATE,false);
+    			functionDec(true, false); //private, native
 
     		}else if(t.is(Token::TT_KEYWORD, "native")) //private native function / private native variable
     		{
@@ -151,12 +151,12 @@ namespace Scales
     			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable
 				{
 
-					variableDec(AccessType::PRIVATE, true, false);
+					variableDec(true, true, false); //private, native, local
 
 				}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //function / event
 				{
 
-					functionDec(AccessType::PRIVATE,true);
+					functionDec(true, true); //private, native
 
 				}else if(t.is(Token::TT_KEYWORD, "init")) //constructor
 				{
@@ -169,7 +169,7 @@ namespace Scales
 
     		}else if(isAccessModifier(t)) //variable / function / constructor
     		{
-    			AccessType access = AccessType::byName(t.getLexem());
+    			bool priv = t.getLexem().equals("private");
     			bool native = false;
 
     			lexer->readToken();
@@ -186,12 +186,12 @@ namespace Scales
     			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable (since there already were keywords typical for a declaration, we don't need to check if the ident really is a type or the beginning of a left eval)
 				{
 
-					variableDec(access, native, false);
+					variableDec(priv, native, false);
 
 				}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //function / event
 				{
 
-					functionDec(access, native);
+					functionDec(priv, native);
 
 				}else if(t.is(Token::TT_KEYWORD, "init")) //constructor
 				{
@@ -200,7 +200,7 @@ namespace Scales
 						error("Constructors must not be native (This will change. Wait for it)", t.getLine()); //TODO: Allow constructors beeing native
 					}
 
-					functionDec(access, false);
+					functionDec(priv, false);
 
 				}else
 				{
@@ -242,7 +242,7 @@ namespace Scales
 				if(isTypeOrNamespace(t.getLexem())) //private variable
 				{
 
-					variableDec(AccessType::PRIVATE, false, true);
+					variableDec(true, false, true);
 
 				}else
 				{
@@ -251,7 +251,7 @@ namespace Scales
 
 			}else if(isPrimitive(t)) //private variable
 			{
-				variableDec(AccessType::PRIVATE, false, true);
+				variableDec(true, false, true);
 
 			}else if(isAccessModifier(t) || t.is(Token::TT_KEYWORD, "native") || t.is(Token::TT_KEYWORD, "static"))
 			{
@@ -562,7 +562,7 @@ namespace Scales
 		return type;
 	}
 
-	void Compiler::variableDec(const AccessType &accessType, bool native, bool local)
+	void Compiler::variableDec(bool priv, bool native, bool local)
 	{
 		DataType type = dataType();
 
@@ -592,7 +592,7 @@ namespace Scales
 
 		Token t = lexer->readToken();
 
-		VariablePrototype v = VariablePrototype(ident.getLexem(), type, accessType);
+		VariablePrototype v = VariablePrototype(ident.getLexem(), type, priv);
 
 		if(local)
 		{
@@ -603,12 +603,21 @@ namespace Scales
 		}
 
 		//Scope is determined by callstack during runtime
-		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)accessType.getTypeID()); //TODO: Object specifier has to be included, oh and also the native flag
+		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)priv + "," + (int)native); //TODO: Object specifier has to be included, oh and also the native flag
 
+		uint8_t flags = 0;
+		if(native)
+		{
+			flags |= 1; //TODO: Maybe store this in a macro
+		}
+		if(priv)
+		{
+			flags |= 2;
+		}
 		asmout << OP_DECLAREVAR;
 		asmout.writeTString(ident.getLexem());
-		asmout.write(type.getTypeID());
-		asmout.write(accessType.getTypeID());
+		asmout.write(flags);
+		writeDatatypeToBytecode(type);
 
 		if(t.is(Token::TT_OPERATOR, "="))
 		{
@@ -635,7 +644,7 @@ namespace Scales
 		}
 	}
 
-    void Compiler::functionDec(const AccessType &accessType, bool native)
+    void Compiler::functionDec(bool priv, bool native)
     {
     	//TODO: Clean up this function; see comment in constructorDec about redundant code
     	Function::FunctionType type;
@@ -697,7 +706,7 @@ namespace Scales
 			}
 		}
 
-		if(type == Function::FT_EVENT && !accessType.equals(AccessType::PUBLIC))
+		if(type == Function::FT_EVENT && priv)
 		{
 			error("Only public access type is applicable for events", ident.getLine());
 		}
@@ -783,20 +792,33 @@ namespace Scales
 
 		}else
 		{
-			defInstr = String("DECLAREFUNC '") + ident.getLexem() + "'," + returnType.getTypeID() + "," + (int)accessType.getTypeID() + "," + (String("") + (int32_t)paramNames.size()) + ",";
+			defInstr = String("DECLAREFUNC '") + ident.getLexem() + "'," + returnType.getTypeID() + "," + (int)priv + "," + (String("") + (int32_t)paramNames.size()) + ",";
 			asmout << OP_DECLAREFUNC;
 		}
 
+		uint8_t flags = 0;
+		if(native)
+		{
+			flags |= 1; //TODO: Maybe store this in a macro
+		}
+		if(priv)
+		{
+			flags |= 2;
+		}
+
 		asmout.writeTString(ident.getLexem());
-		asmout.write(returnType.getTypeID());
-		asmout.write(accessType.getTypeID());
+		asmout.write(flags);
+		if(type != Function::FT_EVENT)
+		{
+			writeDatatypeToBytecode(returnType);
+		}
 		asmout.write(paramTypes.size());
 
 		for(uint32_t i = 0; i < paramTypes.size(); i++)
 		{
 			defInstr = defInstr + (int32_t)paramTypes[i].getTypeID();
 
-			asmout.write(paramTypes[i].getTypeID());
+			writeDatatypeToBytecode(paramTypes[i]);
 
 			if(i < paramTypes.size()-1)
 			{
@@ -815,7 +837,7 @@ namespace Scales
 		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
 
 		//Declare function prototype so it ist available in the scriptsystem
-		Function func = Function(ident.getLexem(), paramTypes, returnType, accessType, native, type, asmout.getSize());
+		Function func = Function(ident.getLexem(), paramTypes, returnType, priv, native, type, asmout.getSize());
 		currentScript->declareFunction(func);
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start:");
@@ -838,15 +860,15 @@ namespace Scales
 			}
 
 			//Declare locals prototypes
-			VariablePrototype v = VariablePrototype(paraName, paraType, AccessType::PRIVATE); //Parameters are always private
+			VariablePrototype v = VariablePrototype(paraName, paraType, true); //Parameters are always private
 			currentScript->declareLocal(v);
 
 			//Declare parameter variables...
-			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "'," + (int)AccessType::PRIVATE.getTypeID());
+			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "',1,0");
 			asmout << OP_DECLAREVAR;
-			asmout.write(paraType.getTypeID());
 			asmout.writeTString(paraName);
-			asmout.write(AccessType::PRIVATE.getTypeID());
+			asmout.write(0x02); //flag byte - private bit is always 1, native bit ist always 0
+			writeDatatypeToBytecode(paraType);
 
 			if(byVal)
 			{
@@ -914,12 +936,7 @@ namespace Scales
 		{
 			if(baseType.getTypeID() != DataType::OBJECT.getTypeID())
 			{
-				error("Only object types have callable member functions, but given type was: " + baseType.toString(), t.getLine());
-			}
-
-			if(baseType.isAbstract())
-			{
-				error("Can not call member functions of abstract object types.", t.getLine());
+				error("Only non-abstract object types have callable member functions, but given type was: " + baseType.toString(), t.getLine());
 			}
 
 			Script *script = scriptSystem.getScript(baseType.getObjectType());
@@ -936,7 +953,7 @@ namespace Scales
 				error("Function '" + Function::createInfoString(funcName, paramTypes) + "' was not defined in given object type script '" + baseType.toString() + "'", t.getLine());
 			}
 			
-			if(function->getAccessType().equals(AccessType::PRIVATE))
+			if(function->isPrivate())
 			{
 				error("Function '" + Function::createInfoString(funcName, paramTypes) + "' in given object type script '" + baseType.toString() + "' is private", t.getLine());
 			}
@@ -1247,10 +1264,10 @@ namespace Scales
 
 			DataType type = dataType();
 
-			if(type.equals(DataType::OBJECT))
+			if(type.getTypeID() == DataType::OBJECT.getTypeID())
 			{
-				writeASM(String("TOOBJECT '") + type.getObjectType().getNamespace() + "','" + type.getObjectType().getScriptname() + "'");
-				asmout << OP_TOOBJECT;
+				writeASM(String("TOOBJECTINSTANCE '") + type.getObjectType().getNamespace() + "','" + type.getObjectType().getScriptname() + "'");
+				asmout << OP_TOOBJECTINSTANCE;
 				asmout.writeTString(type.getObjectType().getNamespace());
 				asmout.writeTString(type.getObjectType().getScriptname());
 
@@ -1335,12 +1352,7 @@ namespace Scales
         {
         	if(info.getType().getTypeID() != DataType::OBJECT.getTypeID())
 			{
-				error("Only object types have accessible members, but given type is: " + info.getType().toString(), t.getLine());
-			}
-
-        	if(info.getType().isAbstract())
-			{
-				error("Can not access members of abstract object types.", t.getLine());
+				error("Only non-abstract object types have accessible members, but given type is: " + info.getType().toString(), t.getLine());
 			}
 
             lexer->readToken();
@@ -1380,7 +1392,7 @@ namespace Scales
 					error("Referenced script '" + info.getType().toString() + "' has no member '" + member.getLexem() + "'", member.getLine());
 				}
 
-				if(v->getAccessType().equals(AccessType::PRIVATE) && !s->getIdent().equals(currentScript->getIdent()))
+				if(v->isPrivate() && !s->getIdent().equals(currentScript->getIdent()))
 				{
 					//If a private object member is accessed from a script of the same type as the object, the access modifier is ignored (like all script methods are declared as friend)
 
@@ -1504,13 +1516,8 @@ namespace Scales
 
             if(scripttype.getTypeID() != DataType::OBJECT.getTypeID())
             {
-            	error("Expected object type identifier after new keyword, but found: " + scripttype.getTypeName(), t.getLine());
+            	error("Expected non-abstract object type identifier after new keyword, but found: " + scripttype.toString(), t.getLine());
             }
-
-            if(scripttype.isAbstract())
-			{
-				error("Can not instantiate abstract objects.", t.getLine());
-			}
 
 			Token t2 = lexer->readToken();
 			if(!t2.is(Token::TT_OPERATOR,"("))
@@ -1561,7 +1568,7 @@ namespace Scales
 				
 			}else
 			{
-				if(constr->getAccessType().equals(AccessType::PRIVATE))
+				if(constr->isPrivate())
 				{
 					error("Constructor " + Function::createInfoString(scripttype.toString(), paramTypes) + " is private", t2.getLine());
 				}
@@ -1665,6 +1672,24 @@ namespace Scales
 
 		return v;
 
+    }
+
+    void Compiler::writeDatatypeToBytecode(const DataType &t)
+    {
+    	uint8_t id = t.getTypeID();
+
+    	if(t.isArray())
+    	{
+    		id |= 8;
+    	}
+
+    	asmout.write(id);
+
+    	if(t.getTypeID() == DataType::OBJECT.getTypeID())
+    	{
+    		asmout.writeTString(t.getObjectType().getNamespace());
+    		asmout.writeTString(t.getObjectType().getScriptname());
+    	}
     }
 
     DataType Compiler::getTypeOfNumberString(const String &s)
@@ -1813,6 +1838,8 @@ namespace Scales
 			"/=",
 			"(",
 			")",
+			"[",
+			"]",
 			"->",
 			"<",
 			">",
