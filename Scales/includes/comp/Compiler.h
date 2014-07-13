@@ -4,11 +4,11 @@
 
 #include <istream>
 
-#include "Nein.h"
+#include "ScalesSystem.h"
+#include "ScalesUtil.h"
 
 #include "DataType.h"
 #include "Compiler.h"
-#include "ScriptSystem.h"
 #include "Lexer.h"
 #include "Exception.h"
 #include "ASMStream.h"
@@ -18,7 +18,7 @@ using std::istream;
 namespace Scales
 {
 
-	class BlockIdent
+	class BlockInfo
 	{
 	public:
 
@@ -33,9 +33,11 @@ namespace Scales
 			BT_SUB
 		};
 
-		BlockIdent(BlockType pType, uint32_t pUid);
+		BlockInfo(BlockType pType, uint32_t pUid, uint32_t pNid, uint32_t pRid);
 
 		uint32_t getUID() const;
+		uint32_t getNestID() const;
+		uint32_t getRowID() const;
 
 		BlockType getBlockType() const;
 
@@ -43,6 +45,8 @@ namespace Scales
 
 		BlockType type;
 		uint32_t uid;
+		uint32_t nid;
+		uint32_t rid;
 	};
 
 	class ExpressionInfo
@@ -82,7 +86,7 @@ namespace Scales
     {
     public:
 
-        Compiler(istream &in, ScriptSystem &ss);
+        Compiler(istream &in, ScalesSystem *ss);
 
         ~Compiler();
 
@@ -90,28 +94,27 @@ namespace Scales
 
     private:
 
-        Lexer *lexer;
+        Lexer lexer;
 
-        ScriptSystem &scriptSystem;
-        Script *currentScript;
+        ScalesSystem *scalesSystem;
+        ClassPrototype *currentClass;
+        FunctionPrototype *currentFunction;
 
         uint32_t lastUID;
 
         void mainBlock();
-        void script(const ScriptIdent &scriptident);
-        BlockIdent::BlockType functionBlock(const BlockIdent &block, const DataType &returnType);
-
-        void ifStatement(const DataType &returnType);
-
-        void leftEval();
-        DataType rightEval();
-
+        void classDef(const String &nspace);
         void functionDec(bool priv, bool native);
-        void constructorDec(bool priv);
+        BlockInfo::BlockType block(const BlockInfo &blockInfo);
+
+        void ifStatement(const BlockInfo &blockInfo, uint32_t &blocksInThisBlock);
+
+        void usingStatement();
 
         void variableDec(bool priv, bool native, bool local);
 
-        DataType dataType();
+        void leftEval();
+        DataType rightEval();
 
         ExpressionInfo expression(const bool leftEval = false);
         ExpressionInfo relationalExpression(const bool leftEval = false);
@@ -124,13 +127,16 @@ namespace Scales
 
         DataType functionCall(const String &funcName, bool member, const DataType &baseType = DataType::NOTYPE);
 
+        DataType dataType();
+        ClassId classId();
+
         DataType getTypeOfNumberString(const String &numberString);
 
         String escapeASMChars(const String &s);
 
         uint32_t getNewUID();
 
-        VariablePrototype *getVariableInScript(Script *s, const String &name);
+        VariablePrototype *getVariableInClass(Class *s, const String &name);
         void writeDatatypeToBytecode(const DataType &t);
 
         bool isLogicOp(const Token &t);

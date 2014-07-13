@@ -22,30 +22,23 @@ namespace Scales
 
 	//public class compiler
 
-    Compiler::Compiler(istream &in, ScriptSystem &ss)
+	//TODO: check for double declarations (not data type double but... ah, you know what I mean)
+	//TODO: currently every single variable declaration takes up one pointer in the varmem forever, even if it leaves scope somewehere. this might be optimized.
+	
+    Compiler::Compiler(istream &in, ScalesSystem *ss)
     :
-    		scriptSystem(ss),
-    		currentScript(null),
-    		lastUID(0)
+    		scalesSystem(ss),
+    		currentClass(null),
+    		currentFunction(null),
+    		lastUID(0),
+    		lexer(in, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
     {
-    	lexer = new Lexer(in, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true);
     }
 
     Compiler::~Compiler()
     {
-    	delete lexer;
-    }
-
-    String intToHex(uint8_t i)
-    {
-    	const char tab[] = "0123456789abcdef";
-
-    	String s;
-
-    	s += tab[(i/16) % 16];
-    	s += tab[i % 16];
-
-    	return s;
+    	delete currentClass;
+    	delete currentFunction;
     }
 
     void Compiler::compile()
@@ -57,30 +50,23 @@ namespace Scales
     {
     	String nspace = "";
 
-    	Token t = lexer->readToken();
+    	Token t = lexer.readToken();
 
-		while(t.getType() != Token::TT_EOF)
+		while(!t.isType(Token::TT_EOF))
 		{
-			if(t.is(Token::TT_KEYWORD,"script"))
+			if(t.is(Token::TT_KEYWORD,"class"))
 			{
-				Token ident = lexer->readToken();
-
-				if(ident.getType() != Token::TT_IDENT)
-				{
-					error("Expected scriptname after 'script' keyword, but found: " + ident.getLexem(),ident.getLine());
-				}
-
-				script(ScriptIdent(nspace, ident.getLexem()));
+				classDef(nspace);
 
 			}else if(t.is(Token::TT_KEYWORD,"namespace"))
 			{
-				t = lexer->readToken();
+				t = lexer.readToken();
 
 				if(t.is(Token::TT_KEYWORD, "default"))
 				{
 					nspace = String("");
 
-				}else if(t.getType() == Token::TT_IDENT)
+				}else if(t.isType(Token::TT_IDENT))
 				{
 					nspace = t.getLexem();
 
@@ -89,7 +75,7 @@ namespace Scales
 					error("Expected namespace identifier or 'default' after namespace keyword, but found: " + t.getLexem(), t.getLine());
 				}
 
-				t = lexer->readToken();
+				t = lexer.readToken();
 
 				if(!t.is(Token::TT_OPERATOR,";"))
 				{
@@ -103,21 +89,58 @@ namespace Scales
 				error("Expected script header or namespace definition, but found: " + t.getLexem(), t.getLine());
 			}
 
-			t = lexer->readToken();
+			t = lexer.readToken();
 		}
     }
 
-    void Compiler::script(const ScriptIdent &scriptident)
+    void Compiler::classDef(const String &nspace)
     {
-    	Script scr = Script(scriptident);
-    	scriptSystem.declareScript(scr);
+    	Token t = lexer.readToken();
+		if(!t.isType(Token::TT_IDENT))
+		{
+			error("Expected classname after 'class' keyword, but found: " + t.getLexem(), t.getLine());
+		}
 
-    	//The Script object is copied by the vector in the scriptsystem. We need a pointer to the version in the vector, so re-fetch the script
-    	currentScript = scriptSystem.getScript(scriptident);
+		ClassId id = ClassId(nspace, t.getLexem());
+		String nativeLink;
+		Class *superclass = null;
 
-    	Token t = lexer->peekToken();
+		t = lexer.peekToken();
+		if(t.is(Token::TT_KEYWORD, "extends"))
+		{
+			lexer.readToken(); //Consume the keyword
 
-    	writeASM("#-------Script " + scriptident.getScriptname() + " start ");
+			t = lexer.peekToken();
+			if(!t.isType(Token::TT_IDENT))
+			{
+				error("Expected script identifier after extends keyword, but found: " + t.getLexem(), t.getLine());
+			}
+
+			ClassId cid = classId();
+
+			superclass = scalesSystem->getClass(cid);
+
+			t = lexer.peekToken();
+		}
+
+		if(t.is(Token::TT_KEYWORD, "links"))
+		{
+			lexer.readToken(); //Consume the "links" keyword
+
+			t = lexer.readToken();
+			if(t.getType() != Token::TT_IDENT)
+			{
+				error("Expected native link unit name after links keyword, but found: " + t.getLexem(), t.getLine());
+			}
+
+			nativeLink = t.getLexem();
+
+			t = lexer.peekToken();
+		}
+
+		currentClass = new ClassPrototype(id, superclass, nativeLink);
+
+    	writeASM("#-------Class " + id.toString() + " start ");
 
     	while(!t.is(Token::TT_KEYWORD,"end"))
     	{
@@ -145,8 +168,8 @@ namespace Scales
 
     		}else if(t.is(Token::TT_KEYWORD, "native")) //private native function / private native variable
     		{
-    			lexer->readToken();
-    			t = lexer->peekToken();
+    			lexer.readToken();
+    			t = lexer.peekToken();
 
     			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable
 				{
@@ -169,18 +192,18 @@ namespace Scales
 
     		}else if(isAccessModifier(t)) //variable / function / constructor
     		{
-    			bool priv = t.getLexem().equals("private");
+    			bool priv = t.isLexem("private");
     			bool native = false;
 
-    			lexer->readToken();
-    			t = lexer->peekToken();
+    			lexer.readToken();
+    			t = lexer.peekToken();
 
     			if(t.is(Token::TT_KEYWORD, "native"))
     			{
     				native = true;
 
-    				lexer->readToken();
-    				t = lexer->peekToken();
+    				lexer.readToken();
+    				t = lexer.peekToken();
     			}
 
     			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable (since there already were keywords typical for a declaration, we don't need to check if the ident really is a type or the beginning of a left eval)
@@ -207,32 +230,38 @@ namespace Scales
 					error("Unexpected token after access modifier: " + t.getLexem(), t.getLine());
 				}
 
+    		}else if(t.is(Token::TT_KEYWORD, "using"))
+    		{
+    			lexer.readToken();
+
+    			usingStatement();
+
     		}else
     		{
-    			error("Unexpected token in script block: " + t.getLexem(), t.getLine());
+    			error("Unexpected token in class block: " + t.getLexem(), t.getLine());
     		}
 
-    		t = lexer->peekToken();
+    		t = lexer.peekToken();
     	}
 
-    	lexer->readToken();
+    	lexer.readToken();
 
-    	writeASM("#-------Script " + scriptident.getScriptname() + " end");
+    	writeASM("#-------Class " + id.getClassname() + " end");
 
     	if(asmout.hasUndefinedMarkers())
 		{
 			error("Fatal error: Compiler generated invalid bytecode. Markers were requested but not defined. This is most likely a compiler bug.", 0);
 		}
 
-    	currentScript->setBytecode(asmout.getStream().toNewArray(), asmout.getSize());
     	asmout.reset();
     }
 
-    BlockIdent::BlockType Compiler::functionBlock(const BlockIdent &block, const DataType &returnType)
+    BlockInfo::BlockType Compiler::block(const BlockInfo &blockInfo)
 	{
-    	currentScript->enterLocalScope();
+    	uint32_t blocksInThisBlock = 0;
 
-		Token t = lexer->peekToken();
+
+		Token t = lexer.peekToken();
 
 		while(!t.is(Token::TT_KEYWORD,"end"))
 		{
@@ -259,43 +288,41 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "begin"))
 			{
-				lexer->readToken();
-
-				uint32_t currentSubBlockUID = getNewUID();
+				lexer.readToken();
 
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				functionBlock(BlockIdent(BlockIdent::BT_SUB, currentSubBlockUID), returnType);
+				block(BlockInfo(BlockInfo::BT_SUB, blockInfo.getNestID() + 1, blocksInThisBlock++, getNewUID()));
 
 				writeASM("END");
 				asmout << OP_END;
 
 			}else if(t.is(Token::TT_KEYWORD, "return"))
 			{
-				lexer->readToken();
+				lexer.readToken();
 
-				t = lexer->peekToken();
+				t = lexer.peekToken();
 
 				if(t.is(Token::TT_OPERATOR, ";"))
 				{
-					lexer->readToken();
+					lexer.readToken();
 
 				}else
 				{
-					if(returnType.equals(DataType::NOTYPE))
+					if(currentFunction->getReturnType().equals(DataType::NOTYPE))
 					{
 						error("Can not return a value in a void function/event. Expected semicolon after 'return' keyword", t.getLine());
 					}
 
 					ExpressionInfo info = expression();
 
-					if(!info.getType().canCastImplicitlyTo(returnType))
+					if(!info.getType().canCastImplicitlyTo(currentFunction->getReturnType()))
 					{
-						error("Type mismatch in return statement: Can not implicitly cast " + info.getType().toString() + " to " + returnType.toString(), t.getLine());
+						error("Type mismatch in return statement: Can not implicitly cast " + info.getType().toString() + " to " + currentFunction->getReturnType().toString(), t.getLine());
 					}
 
-					t = lexer->readToken();
+					t = lexer.readToken();
 					if(!t.is(Token::TT_OPERATOR, ";"))
 					{
 						error("Expected semicolon after return expression, but found: " + t.getLexem(), t.getLine());
@@ -307,7 +334,7 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "while"))
 			{
-				lexer->readToken();
+				lexer.readToken();
 
 				int32_t currentWhileUID = getNewUID();
 
@@ -327,7 +354,7 @@ namespace Scales
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				functionBlock(BlockIdent(BlockIdent::BT_WHILE, currentWhileUID), returnType);
+				block(BlockInfo(BlockInfo::BT_WHILE, blockInfo.getNestID() + 1, blocksInThisBlock++, currentWhileUID));
 
 				writeASM("END");
 				asmout << OP_END;
@@ -341,23 +368,24 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "if"))
 			{
-				lexer->readToken();
+				lexer.readToken();
 
-				ifStatement(returnType);
+				ifStatement(blockInfo, blocksInThisBlock);
 
 			}else if(t.is(Token::TT_KEYWORD, "else"))
 			{
-				lexer->readToken();
+				lexer.readToken();
 
-				if(block.getBlockType() == BlockIdent::BT_IF)
+				if(blockInfo.getBlockType() == BlockInfo::BT_IF)
 				{
 
-					return BlockIdent::BT_ELSE; //Returns to ifStatement(), further processing happens there
+					return BlockInfo::BT_ELSE; //Returns to ifStatement(), further processing happens there
 
-				}else if(block.getBlockType() == BlockIdent::BT_ELSEIF)
+				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSEIF)
 				{
 
-					//Currently unsupported, should never occur anyhow TODO: We should at least do some error processing here
+					//Should never occur. Don't take it seriously
+					error("I don't know what you did, but somehow you did break the compiler. Here is your error code: 999999.", 0);
 
 				}else
 				{
@@ -366,19 +394,20 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "elseif"))
 			{
-				lexer->readToken();
+				lexer.readToken();
 
-				if(block.getBlockType() == BlockIdent::BT_IF)
+				if(blockInfo.getBlockType() == BlockInfo::BT_IF)
 				{
 
-					return BlockIdent::BT_ELSEIF; //Returns to ifStatement(), further processing happens there
+					return BlockInfo::BT_ELSEIF; //Returns to ifStatement(), further processing happens there
 
-				}else if(block.getBlockType() == BlockIdent::BT_ELSEIF)
+				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSEIF)
 				{
 
-					//Currently unsupported, should never occur anyhow
+					//Should never occur. Don't take it seriously
+					error("I don't know what you did, but somehow you did break the compiler. Here is your error code: 999999.", 0);
 
-				}else if(block.getBlockType() == BlockIdent::BT_ELSE)
+				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSE)
 				{
 
 					error("Else-block must be defined before else-block", t.getLine());
@@ -402,26 +431,29 @@ namespace Scales
 				error("Unexpected token in function block: " + t.getLexem(), t.getLine());
 			}
 
-			t = lexer->peekToken();
+			t = lexer.peekToken();
 		}
 
-		lexer->readToken();
+		lexer.readToken();
 
-		currentScript->leaveLocalScope();
-
-		return BlockIdent::BT_MAIN; //Regular processing
+		return BlockInfo::BT_MAIN; //Regular processing
 	}
 
-    void Compiler::ifStatement(const DataType &returnType)
+    //@param blockInfo This is the BlockInfo of the the block the if is encountered in. NOT of the if block itself.
+    void Compiler::ifStatement(const BlockInfo &blockInfo, uint32_t &blocksInThisBlock)
     {
-    	ExpressionInfo info = expression();
+    	//Note: The concept of if block parsing was developed back in KniftoScript2 days, and I have completely forgotten if there
+    	//were any better solutions that didn't make it into the implementation. Anyway, the current one messes up the whole compiler.
+    	//Although this code reminds me of the wonderful holiday I had when I was thinking about advanced If blocks how they are right now, we might
+    	//improve this so the code becomes more structured and clearer. TODO: Maybe improve if block parsing
 
+    	ExpressionInfo info = expression();
 		if(!info.getType().isNumeric())
 		{
-			error("Condition in if statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", lexer->getCurrentLine());
+			error("Condition in if statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", lexer.getCurrentLine());
 		}
 
-		int currentIfUID = getNewUID();
+		uint32_t currentIfUID = getNewUID();
 
 		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
 		asmout << OP_JUMPFALSE;
@@ -430,12 +462,12 @@ namespace Scales
 		writeASM("BEGIN");
 		asmout << OP_BEGIN;
 
-		BlockIdent::BlockType bt = functionBlock(BlockIdent(BlockIdent::BT_IF, currentIfUID), returnType);
+		BlockInfo::BlockType bt = block(BlockInfo(BlockInfo::BT_IF, blockInfo.getNestID()+1, blocksInThisBlock++, currentIfUID));
 
 		writeASM("END");
 		asmout << OP_END;
 
-		if(bt == BlockIdent::BT_ELSE || bt == BlockIdent::BT_ELSEIF)
+		if(bt == BlockInfo::BT_ELSE || bt == BlockInfo::BT_ELSEIF)
 		{
 			writeASM(String("JUMP if_else_uid") + currentIfUID + "_end");
 		}
@@ -443,22 +475,22 @@ namespace Scales
 		writeASM(String("if_uid") + currentIfUID + "_end:");
 		asmout.defineMarker(String("if_uid") + currentIfUID + "_end");
 
-		if(bt == BlockIdent::BT_ELSE || bt == BlockIdent::BT_ELSEIF)
+		if(bt == BlockInfo::BT_ELSE || bt == BlockInfo::BT_ELSEIF)
 		{
 			writeASM(String("# if_else_uid") + currentIfUID + "_start:");
 
-			if(bt == BlockIdent::BT_ELSE)
+			if(bt == BlockInfo::BT_ELSE)
 			{
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				functionBlock(BlockIdent(BlockIdent::BT_ELSE, currentIfUID), returnType);
+				block(BlockInfo(BlockInfo::BT_ELSE, blockInfo.getNestID(), blocksInThisBlock++, getNewUID()));
 
 				writeASM("END");
 				asmout << OP_END;
 			}else
 			{
-				ifStatement(returnType);
+				ifStatement(blockInfo, blocksInThisBlock);
 			}
 
 			writeASM(String("if_else_uid") + currentIfUID + "_end:");
@@ -466,11 +498,40 @@ namespace Scales
 		}
     }
 
+    void Compiler::usingStatement()
+    {
+    	Token t = lexer.peekToken();
+
+    	if(t.is(Token::TT_KEYWORD, "namespace"))
+    	{
+    		error("Namespace imports currently unsupported", t.getLine());
+    	}
+
+    	if(t.getType() != Token::TT_IDENT)
+    	{
+    		error("Expected namespace identifier after using keyword, but found: " + t.getLexem(), t.getLine());
+    	}
+
+    	DataType type = dataType();
+
+    	if(type.getTypeID() != DataType::OBJECT.getTypeID())
+    	{
+    		error(String("Expected script identifier after using keyword."), t.getLine());
+    	}
+
+    	t = lexer.readToken();
+
+    	if(!t.is(Token::TT_OPERATOR, ";"))
+    	{
+    		error("Expected semicolon after using statement, but found: " + t.getLexem(), t.getLine());
+    	}
+    }
+
     void Compiler::leftEval()
 	{
     	ExpressionInfo left = expression(true);
 
-    	Token t = lexer->peekToken();
+    	Token t = lexer.peekToken();
 
     	if(t.is(Token::TT_OPERATOR, ";"))
     	{
@@ -485,7 +546,7 @@ namespace Scales
     			asmout << OP_DISCARD;
     		}
 
-    		lexer->readToken();
+    		lexer.readToken();
 
     	}else if(isAssignmentOperator(t))
     	{
@@ -510,7 +571,7 @@ namespace Scales
 
 	DataType Compiler::rightEval()
 	{
-		Token t = lexer->readToken();
+		Token t = lexer.readToken();
 		DataType type = DataType::NOTYPE;
 
 		if(t.is(Token::TT_OPERATOR, "="))
@@ -550,7 +611,7 @@ namespace Scales
 			}
 		}
 
-		t = lexer->readToken();
+		t = lexer.readToken();
 		if(!t.is(Token::TT_OPERATOR, ";"))
 		{
 			error("Expected semicolon after assignment, but found: " + t.getLexem(), t.getLine());
@@ -566,7 +627,7 @@ namespace Scales
 	{
 		DataType type = dataType();
 
-		Token ident = lexer->readToken();
+		Token ident = lexer.readToken();
 
 		if(ident.getType() != Token::TT_IDENT)
 		{
@@ -590,9 +651,10 @@ namespace Scales
 		}
 
 
-		Token t = lexer->readToken();
+		Token t = lexer.readToken();
 
-		VariablePrototype v = VariablePrototype(ident.getLexem(), type, priv);
+		VariablePrototype v = VariablePrototype(ident.getLexem(), type, priv, currentScript->getMemorySize());
+		currentScript->setMemorySize(currentScript->getMemorySize() + 1);
 
 		if(local)
 		{
@@ -628,7 +690,7 @@ namespace Scales
 				error("Type mismatch in variable initialization: Can not implicitly cast " + info.getType().toString() + " to " + type.toString(), t.getLine());
 			}
 
-			t = lexer->readToken();
+			t = lexer.readToken();
 
 			if(!t.is(Token::TT_OPERATOR, ";"))
 			{
@@ -649,7 +711,7 @@ namespace Scales
     	//TODO: Clean up this function; see comment in constructorDec about redundant code
     	Function::FunctionType type;
 
-    	Token t = lexer->readToken();
+    	Token t = lexer.readToken();
 
     	if(t.is(Token::TT_KEYWORD, "event"))
     	{
@@ -671,7 +733,7 @@ namespace Scales
     	DataType returnType = DataType::NOTYPE;
     	if(type == Function::FT_NORMAL)
     	{
-    		t = lexer->peekToken();
+    		t = lexer.peekToken();
 
     		if(!t.is(Token::TT_KEYWORD, "void"))
     		{
@@ -679,12 +741,12 @@ namespace Scales
 
     		}else
     		{
-    			lexer->readToken();
+    			lexer.readToken();
     		}
     	}
 
 
-		Token ident = (type == Function::FT_CONSTRUCTOR) ? t : lexer->readToken(); //The ident of a constructor is it's recognizer (init)
+		Token ident = (type == Function::FT_CONSTRUCTOR) ? t : lexer.readToken(); //The ident of a constructor is it's recognizer (init)
 
 		if(type != Function::FT_CONSTRUCTOR)
 		{
@@ -711,7 +773,7 @@ namespace Scales
 			error("Only public access type is applicable for events", ident.getLine());
 		}
 
-		t = lexer->readToken();
+		t = lexer.readToken();
 
 		if(!t.is(Token::TT_OPERATOR,"("))
 		{
@@ -721,7 +783,7 @@ namespace Scales
 		vector<DataType> paramTypes = vector<DataType>();
 		vector<String> paramNames = vector<String>();
 
-		if(!lexer->peekToken().is(Token::TT_OPERATOR,")"))
+		if(!lexer.peekToken().is(Token::TT_OPERATOR,")"))
 		{
 			do
 			{
@@ -730,10 +792,10 @@ namespace Scales
 
 				bool byVal = false;
 
-				t = lexer->readToken();
+				t = lexer.readToken();
 				if(t.is(Token::TT_OPERATOR, "$"))
 				{
-					t = lexer->readToken();
+					t = lexer.readToken();
 
 					byVal = true;
 				}
@@ -751,7 +813,7 @@ namespace Scales
 				//Rather than creating a new vector just for the byVals, we insert the dollar into the varname for later evaluation
 				paramNames.push_back(byVal ? ("$" + t.getLexem()) : t.getLexem());
 
-				t = lexer->readToken();
+				t = lexer.readToken();
 
 				if(!(t.is(Token::TT_OPERATOR,",") || (t.is(Token::TT_OPERATOR,")"))))
 				{
@@ -762,7 +824,7 @@ namespace Scales
 
 		}else
 		{
-			t = lexer->readToken();
+			t = lexer.readToken();
 		}
 
 		if(!t.is(Token::TT_OPERATOR,")"))
@@ -772,7 +834,7 @@ namespace Scales
 
 		if(native)
 		{
-			t = lexer->readToken();
+			t = lexer.readToken();
 			if(!t.is(Token::TT_OPERATOR, ";"))
 			{
 				error(String("Native functions must not have a body. Expected semicolon after parameter list") ,t.getLine());
@@ -826,6 +888,11 @@ namespace Scales
 			}
 		}
 
+		if(currentScript->getFunction(ident.getLexem(), paramTypes) != null)
+		{
+			error("Double declaration of function " + Function::createInfoString(ident.getLexem(), paramTypes) + " in script " + currentScript->getIdent().toString(), ident.getLine());
+		}
+
 		int currentFunctionUID = getNewUID();
 
 		defInstr += ",func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start";
@@ -860,7 +927,8 @@ namespace Scales
 			}
 
 			//Declare locals prototypes
-			VariablePrototype v = VariablePrototype(paraName, paraType, true); //Parameters are always private
+			VariablePrototype v = VariablePrototype(paraName, paraType, true, currentScript->getMemorySize()); //Parameters are always private
+			currentScript->setMemorySize(currentScript->getMemorySize() + 1);
 			currentScript->declareLocal(v);
 
 			//Declare parameter variables...
@@ -897,7 +965,7 @@ namespace Scales
 
     DataType Compiler::functionCall(const String &funcName, bool member, const DataType &baseType)
     {
-		Token t = lexer->readToken();
+		Token t = lexer.readToken();
 		if(!t.is(Token::TT_OPERATOR,"("))
 		{
 			error("Expected opening parentheses after function name in function call", t.getLine());
@@ -907,7 +975,7 @@ namespace Scales
 
 		vector<DataType> paramTypes;
 
-		t = lexer->peekToken();
+		t = lexer.peekToken();
 		if(!t.is(Token::TT_OPERATOR,")"))
 		{
 
@@ -918,7 +986,7 @@ namespace Scales
 				paramTypes.push_back(info.getType());
 
 				paramCount++;
-				t = lexer->readToken();
+				t = lexer.readToken();
 
 			}while(t.is(Token::TT_OPERATOR,","));
 
@@ -929,7 +997,7 @@ namespace Scales
 
 		}else
 		{
-			lexer->readToken();
+			lexer.readToken();
 		}
 
 		if(member)
@@ -987,7 +1055,7 @@ namespace Scales
 
     DataType Compiler::dataType()
     {
-    	Token t = lexer->readToken();
+    	Token t = lexer.readToken();
 
     	if(isPrimitive(t))
     	{
@@ -996,7 +1064,7 @@ namespace Scales
 
     	}else if(t.getType() == Token::TT_IDENT)
     	{
-    		Token t2 = lexer->peekToken();
+    		Token t2 = lexer.peekToken();
 
     		if(t2.is(Token::TT_OPERATOR, ":"))
     		{
@@ -1005,8 +1073,8 @@ namespace Scales
     				error("Identifier '" + t.getLexem() + "' does not name a namespace", t.getLine());
     			}
 
-    			lexer->readToken();
-    			t2 = lexer->readToken();
+    			lexer.readToken();
+    			t2 = lexer.readToken();
 
     			if(t2.getType() != Token::TT_IDENT)
     			{
@@ -1064,10 +1132,10 @@ namespace Scales
     {
         ExpressionInfo info = relationalExpression(leftEval);
 
-        Token t = lexer->peekToken();
+        Token t = lexer.peekToken();
         while(isLogicOp(t))
         {
-            lexer->readToken();
+            lexer.readToken();
 
             ExpressionInfo rightInfo = relationalExpression(leftEval);
 
@@ -1093,7 +1161,7 @@ namespace Scales
                 asmout << OP_LOGICAND;
             }
 
-            t = lexer->peekToken();
+            t = lexer.peekToken();
         }
 
         return info;
@@ -1103,10 +1171,10 @@ namespace Scales
     {
         ExpressionInfo info = arithmeticExpression(leftEval);
 
-        Token t = lexer->peekToken();
+        Token t = lexer.peekToken();
         while(isRelationalOp(t))
         {
-            lexer->readToken();
+            lexer.readToken();
 
             ExpressionInfo rightInfo = arithmeticExpression(leftEval);
             info = ExpressionInfo(DataType::INT, rightInfo.isConstant() && info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //Type is always int after relation
@@ -1145,7 +1213,7 @@ namespace Scales
                 asmout << OP_INVERT;
             }
 
-            t = lexer->peekToken();
+            t = lexer.peekToken();
         }
 
         return info;
@@ -1155,10 +1223,10 @@ namespace Scales
     {
     	ExpressionInfo info = term(leftEval);
 
-        Token t = lexer->peekToken();
+        Token t = lexer.peekToken();
         while(isAddOp(t))
         {
-            lexer->readToken();
+            lexer.readToken();
 
             ExpressionInfo rightInfo = term(leftEval);
 
@@ -1203,7 +1271,7 @@ namespace Scales
                 asmout << OP_SUBTRACT;
             }
 
-            t = lexer->peekToken();
+            t = lexer.peekToken();
         }
 
         return info;
@@ -1213,10 +1281,10 @@ namespace Scales
     {
     	ExpressionInfo info = castFactor(leftEval);
 
-        Token t = lexer->peekToken();
+        Token t = lexer.peekToken();
         while(isMultiplyOp(t))
         {
-            lexer->readToken();
+            lexer.readToken();
 
             ExpressionInfo rightInfo = castFactor(leftEval);
 
@@ -1242,7 +1310,7 @@ namespace Scales
                 asmout << OP_DIVIDE;
             }
 
-            t = lexer->peekToken();
+            t = lexer.peekToken();
         }
 
         return info;
@@ -1252,7 +1320,7 @@ namespace Scales
 	{
 		ExpressionInfo info = signedFactor(leftEval);
 
-		Token t = lexer->peekToken();
+		Token t = lexer.peekToken();
 		if(t.is(Token::TT_OPERATOR,"->"))
 		{
 			if(info.getType().equals(DataType::NOTYPE))
@@ -1260,7 +1328,7 @@ namespace Scales
 				error("Can not cast nulltype to anything", t.getLine());
 			}
 
-			lexer->readToken();
+			lexer.readToken();
 
 			DataType type = dataType();
 
@@ -1289,21 +1357,21 @@ namespace Scales
 		bool invert = false;
 		bool toVal = false;
 
-		Token t = lexer->peekToken();
+		Token t = lexer.peekToken();
 		if(t.is(Token::TT_OPERATOR,"-"))
 		{
 			negate = true;
-			lexer->readToken();
+			lexer.readToken();
 
 		}else if(t.is(Token::TT_OPERATOR,"!"))
 		{
 			invert = true;
-			lexer->readToken();
+			lexer.readToken();
 
 		}else if(t.is(Token::TT_OPERATOR,"$"))
 		{
 			toVal = true;
-			lexer->readToken();
+			lexer.readToken();
 		}
 
 		ExpressionInfo info = memberFactor(leftEval);
@@ -1347,7 +1415,7 @@ namespace Scales
     {
         ExpressionInfo info = factor(leftEval);
 
-        Token t = lexer->peekToken();
+        Token t = lexer.peekToken();
         while(t.is(Token::TT_OPERATOR,"."))
         {
         	if(info.getType().getTypeID() != DataType::OBJECT.getTypeID())
@@ -1355,8 +1423,8 @@ namespace Scales
 				error("Only non-abstract object types have accessible members, but given type is: " + info.getType().toString(), t.getLine());
 			}
 
-            lexer->readToken();
-            t = lexer->readToken();
+            lexer.readToken();
+            t = lexer.readToken();
             if(t.getType() != Token::TT_IDENT)
             {
                 error(String("Expected identifier after member directive, but found: ") + t.getLexem(), t.getLine());
@@ -1364,7 +1432,7 @@ namespace Scales
 
             Token member = t;
 
-            t = lexer->peekToken();
+            t = lexer.peekToken();
             if(t.is(Token::TT_OPERATOR,"("))
             {
                 DataType ftype = functionCall(member.getLexem(), true, info.getType());
@@ -1412,7 +1480,7 @@ namespace Scales
 
     ExpressionInfo Compiler::factor(const bool leftEval)
     {
-        Token t = lexer->readToken();
+        Token t = lexer.readToken();
 
         if(t.getType() == Token::TT_NUMBER)
         {
@@ -1439,7 +1507,7 @@ namespace Scales
 
         }else if(t.getType() == Token::TT_IDENT)
         {
-            Token t2 = lexer->peekToken();
+            Token t2 = lexer.peekToken();
             if(t2.is(Token::TT_OPERATOR,"("))
             {
                 DataType type = functionCall(t.getLexem(), false);
@@ -1455,14 +1523,14 @@ namespace Scales
             {
             	VariablePrototype *v = getVariableInScript(currentScript, t.getLexem());
 
-            	lexer->readToken();
+            	lexer.readToken();
 
             	expression();
 
             	writeASM("GETINDEX");
             	asmout << OP_GETINDEX;
 
-            	t2 = lexer->readToken();
+            	t2 = lexer.readToken();
 				if(!t2.is(Token::TT_OPERATOR, "]"))
 				{
 					error("Missing closing square brackets after array index expression",t.getLine());
@@ -1490,7 +1558,7 @@ namespace Scales
         {
             ExpressionInfo info = expression();
 
-            Token t2 = lexer->readToken();
+            Token t2 = lexer.readToken();
             if(!t2.is(Token::TT_OPERATOR,")"))
             {
                 error("Missing closing parentheses after expression",t.getLine());
@@ -1502,7 +1570,7 @@ namespace Scales
         {
             DataType type = arrayLiteral();
 
-            Token t2 = lexer->readToken();
+            Token t2 = lexer.readToken();
             if(!t2.is(Token::TT_OPERATOR,")"))
             {
                 error("Missing closing square brackets after array literal expression",t.getLine());
@@ -1519,7 +1587,7 @@ namespace Scales
             	error("Expected non-abstract object type identifier after new keyword, but found: " + scripttype.toString(), t.getLine());
             }
 
-			Token t2 = lexer->readToken();
+			Token t2 = lexer.readToken();
 			if(!t2.is(Token::TT_OPERATOR,"("))
 			{
 				error("Expected parameter list after scriptname in constructor call, but found: " + t2.getLexem(), t2.getLine());
@@ -1529,7 +1597,7 @@ namespace Scales
 
 			vector<DataType> paramTypes = vector<DataType>();
 
-			t2 = lexer->peekToken();
+			t2 = lexer.peekToken();
 			if(!t2.is(Token::TT_OPERATOR,")"))
 			{
 
@@ -1540,7 +1608,7 @@ namespace Scales
 					paramTypes.push_back(info.getType());
 
 					paramCount++;
-					t2 = lexer->readToken();
+					t2 = lexer.readToken();
 
 				}while(t2.is(Token::TT_OPERATOR,","));
 
@@ -1551,7 +1619,7 @@ namespace Scales
 
 			}else
 			{
-				lexer->readToken();
+				lexer.readToken();
 			}
 			
 			Script *script = scriptSystem.getScript(scripttype.getObjectType());
@@ -1595,7 +1663,7 @@ namespace Scales
         	//Note: the public API for scripts should not give any access to locals. Same goes for the one used for variable type stuff during compile time
         	//so this.xyz won't let the program access locals. (Functions where locals have same name as globals which should still be accessed can be by using 'this')
 
-        	t = lexer->peekToken();
+        	t = lexer.peekToken();
 
         	if(t.is(Token::TT_OPERATOR, "("))
         	{
@@ -1629,7 +1697,7 @@ namespace Scales
 
     /*ArrayType Compiler::arrayLiteral()
     {
-    	Token t = lexer->peekToken();
+    	Token t = lexer.peekToken();
     	DataType *type = null;
     	uint32_t elementCount = 0;
 
@@ -1645,11 +1713,11 @@ namespace Scales
     		{
     			if(!type->equals(info.getType()))
     			{
-    				error("Type mismatch in array literal: First element in list was of type " + type->toString() + ", but element #" + (int)elementCount + " was of type " + info.getType().toString() + " (implicit casts in array literals are not yet allowed)", lexer->getCurrentLine());
+    				error("Type mismatch in array literal: First element in list was of type " + type->toString() + ", but element #" + (int)elementCount + " was of type " + info.getType().toString() + " (implicit casts in array literals are not yet allowed)", lexer.getCurrentLine());
     			}
     		}
 
-    		t = lexer->readToken();
+    		t = lexer.readToken();
     		if(!t.is(Token::TT_OPERATOR, ",") && !t.is(Token::TT_OPERATOR, "]"))
     		{
     			error("Expected ',' after array literal element #" + (int)elementCount + ", but found: " + t.getLexem(), t.getLine());
@@ -1791,7 +1859,7 @@ namespace Scales
 			"static",
 			"links",
 			"extends",
-			"uses",
+			"using",
 			"return",
 			"while",
 			"if",

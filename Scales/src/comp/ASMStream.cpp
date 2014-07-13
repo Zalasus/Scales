@@ -11,6 +11,96 @@
 namespace Scales
 {
 
+	ByteArrayOutputStream::ByteArrayOutputStream()
+	{
+		bufferSize = 32;
+		count = 0;
+
+		buffer = new uint8_t[bufferSize];
+	}
+
+	ByteArrayOutputStream::~ByteArrayOutputStream()
+	{
+		delete[] buffer;
+	}
+
+	void ByteArrayOutputStream::write(uint8_t c)
+	{
+		uint32_t newcount = count + 1;
+
+		if(newcount > bufferSize)
+		{
+			uint32_t shiftedLen = bufferSize << 1;
+			uint32_t newLen = (shiftedLen >= newcount) ? shiftedLen : newcount;
+
+			uint8_t *newBuffer = new uint8_t[newLen];
+
+			for(uint32_t i = 0; i < bufferSize; i++)
+			{
+				newBuffer[i] = buffer[i];
+			}
+
+			delete[] buffer;
+			buffer = newBuffer;
+			bufferSize = newLen;
+		}
+
+		buffer[count] = c;
+
+		count = newcount;
+	}
+
+	uint32_t ByteArrayOutputStream::size()
+	{
+		return count;
+	}
+
+	void ByteArrayOutputStream::reset()
+	{
+		count = 0;
+	}
+
+	/**
+	 * Copies the buffer to a new memory block including only the cells that were written to.
+	 * The stream does not take care of cleaning up the ressources created by this method.
+	 */
+	uint8_t *ByteArrayOutputStream::toNewArray()
+	{
+		uint8_t *newBuffer = new uint8_t[count];
+
+		for(uint32_t i = 0; i < count; i++)
+		{
+			newBuffer[i] = buffer[i];
+		}
+
+		return newBuffer;
+	}
+
+	/**
+	 * Copies the buffer to a new memory block including all allocated cells.
+	 * The stream does not take care of cleaning up the ressources created by this method.
+	 */
+	uint8_t *ByteArrayOutputStream::newBufferCopy()
+	{
+		uint8_t *newBuffer = new uint8_t[bufferSize];
+
+		for(uint32_t i = 0; i < bufferSize; i++)
+		{
+			newBuffer[i] = buffer[i];
+		}
+
+		return newBuffer;
+	}
+
+	uint8_t *ByteArrayOutputStream::getBuffer()
+	{
+		return buffer;
+	}
+
+
+	//---------------------------------------------
+
+
 	void ASMStream::write(uint8_t b)
 	{
 		stream.write(b);
@@ -36,7 +126,7 @@ namespace Scales
 
 		for(int32_t i = 0; i < s.length(); i++)
 		{
-			stream.write(s.charAt(i));
+			stream.write(s[i]);
 
 			if(i == 0xFFFF)
 			{
@@ -51,7 +141,7 @@ namespace Scales
 
 		for(int32_t i = 0; i < s.length(); i++)
 		{
-			stream.write(s.charAt(i));
+			stream.write(s[i]);
 
 			if(i == 0xFF)
 			{
@@ -66,7 +156,7 @@ namespace Scales
 
 		for(int32_t i = 0; i < s.length(); i++)
 		{
-			stream.write(s.charAt(i));
+			stream.write(s[i]);
 		}
 	}
 
@@ -77,7 +167,7 @@ namespace Scales
 		//Check if this marker was already requested. If yes -> write it to its destination
 		for(auto it = requestedMarkers.begin(); it != requestedMarkers.end();)
 		{
-			if(it->second.equals(name))
+			if(it->second == name)
 			{
 				uint32_t adr = it->first;
 
@@ -133,7 +223,7 @@ namespace Scales
 		return (requestedMarkers.size() > 0);
 	}
 
-	uint8_t *ASMStream::getBytecode()
+	uint8_t *ASMStream::getBuffer()
 	{
 		return stream.getBuffer();
 	}

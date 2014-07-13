@@ -1,11 +1,12 @@
 
-#include "comp/Lexer.h"
-#include "Exception.h"
-#include "Nein.h"
 
 #include <cstdio>
-
 #include <iostream>
+
+#include "comp/Lexer.h"
+
+#include "Exception.h"
+
 
 namespace Scales
 {
@@ -134,7 +135,7 @@ namespace Scales
 				{
 					String end = String("") + I_COMMENT_MULTILINE_CONT;
 
-					if(lchar == I_COMMENT_SINGLELINE && s.endsWith(end))
+					if(lchar == I_COMMENT_SINGLELINE && StringUtils::endsWith(s, end))
 					{
 						//Found end token for multiline comment
 						readNext(); //consume it
@@ -157,7 +158,7 @@ namespace Scales
 			{
 				//If multiline, cut away multiline indicators (check if there really is one at the end; comment might be closed by EOF, too)
 
-				return Token(Token::TT_COMMENT_MULTILINE, s.substring(1,s.endsWith("*") ? s.length()-1 : s.length()), startIndex, currentIndex, startLine);
+				return Token(Token::TT_COMMENT_MULTILINE, StringUtils::substring(s, 1, StringUtils::endsWith(s,"*") ? s.length()-1 : s.length()), startIndex, currentIndex, startLine);
 
 			}else
 			{
@@ -174,7 +175,7 @@ namespace Scales
 				op += (char)lchar;
 			}
 
-			String s = op.substring(0, op.length()-1);
+			String s = StringUtils::substring(op, 0, op.length()-1);
 
 			if(!isOperator(s))
 			{
@@ -281,7 +282,7 @@ namespace Scales
     {
     	for(uint32_t i = 0; i < keywordCount ; i++)
     	{
-    		if(keywords[i].equals(s))
+    		if(keywords[i] == s)
 			{
 				return true;
 			}
@@ -294,7 +295,7 @@ namespace Scales
 	{
     	for(uint32_t i = 0; i < operatorCount ; i++)
 		{
-			if(operators[i].equals(s))
+			if(operators[i] == s)
 			{
 				return true;
 			}
@@ -309,7 +310,7 @@ namespace Scales
     	{
     		String so = operators[i];
 
-    		if(so.startsWith(op))
+    		if(StringUtils::startsWith(so, op))
     		{
     			return true;
     		}
@@ -320,12 +321,12 @@ namespace Scales
 
     bool Lexer::isAlpha(int c)
     {
-    	return ALPHAS.indexOf((char)c) != -1;
+    	return StringUtils::indexOf(ALPHAS, (char)c) != -1;
     }
 
     bool Lexer::isNumeric(int c)
     {
-    	return NUMBERS.indexOf((char)c) != -1;
+    	return StringUtils::indexOf(NUMBERS, (char)c) != -1;
     }
 
     void Lexer::lexerError(const String &msg)
@@ -387,11 +388,16 @@ namespace Scales
 
 	bool Token::is(Token::TokenType type, const String &lexem) const
 	{
-		return (tokenType == type && tokenLexem.equals(lexem));
+		return (tokenType == type && tokenLexem ==lexem);
 	}
 
-	bool Token::is(Token::TokenType type, const char *lexem) const
+	bool Token::isLexem(const String &s) const
 	{
-		return is(type, String(lexem));
+		return !tokenLexem.compare(s);
+	}
+
+	bool Token::isType(TokenType t) const
+	{
+		return tokenType == t;
 	}
 }

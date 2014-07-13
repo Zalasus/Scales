@@ -8,6 +8,8 @@
 #include <iostream>
 #include <fstream>
 
+#include <time.h>
+
 #include "comp/Lexer.h"
 #include "comp/Compiler.h"
 #include "DataType.h"
@@ -17,6 +19,10 @@ using namespace Scales;
 
 int main()
 {
+
+	std::cout << "Compiling starts now" << std::endl;
+
+	clock_t t = clock();
 
 	std::ifstream in("oos3.sss", std::ios::in);
 
@@ -32,7 +38,7 @@ int main()
 
 		}catch(ScalesException &e)
 		{
-			std::cout << e.getMessage() << std::endl;
+			std::cerr << e.getMessage() << std::endl;
 		}
 
 		delete c;
@@ -43,7 +49,7 @@ int main()
 
 		if(scr == null)
 		{
-			std::cout << "The script " << ident.toString() << " was not declared in the script system" << std::endl;
+			std::cerr << "The script " << ident.toString() << " was not declared in the script system" << std::endl;
 
 		}else
 		{
@@ -55,6 +61,9 @@ int main()
 
 	in.close();
 
+	t = clock() - t;
+
+	std::cout << "Finished. That took me about " << t << " ticks, which is roughly " << ((float)t)/CLOCKS_PER_SEC << " seconds" << std::endl;
 
 	/*ScriptSystem ss = ScriptSystem();
 

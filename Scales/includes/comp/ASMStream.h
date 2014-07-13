@@ -8,7 +8,7 @@
 #ifndef ASMSTREAM_H_
 #define ASMSTREAM_H_
 
-#include "Nein.h"
+#include "ScalesUtil.h"
 #include "Bytecode.h"
 
 #include <unordered_map>
@@ -17,6 +17,29 @@ using std::unordered_map;
 
 namespace Scales
 {
+
+	class ByteArrayOutputStream
+	{
+	public:
+		ByteArrayOutputStream();
+		~ByteArrayOutputStream();
+
+		void write(uint8_t c);
+
+		uint32_t size();
+
+		void reset();
+
+		uint8_t *toNewArray();
+		uint8_t *newBufferCopy();
+		uint8_t *getBuffer();
+
+	private:
+		uint8_t *buffer;
+		uint32_t bufferSize;
+		uint32_t count;
+
+	};
 
 	class ASMStream
 	{
@@ -38,7 +61,7 @@ namespace Scales
 
 		bool hasUndefinedMarkers();
 
-		uint8_t *getBytecode();
+		uint8_t *getBuffer();
 		uint32_t getSize();
 		ByteArrayOutputStream &getStream();
 

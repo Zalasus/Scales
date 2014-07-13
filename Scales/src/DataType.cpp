@@ -4,49 +4,6 @@
 namespace Scales
 {
 
-	//public class ScriptIdent
-
-	ScriptIdent::ScriptIdent(String pNspace, String pSname) : nspace(pNspace), sname(pSname)
-	{
-	}
-
-	ScriptIdent::ScriptIdent(String pSname) : nspace(""), sname(pSname)
-	{
-	}
-
-	const String &ScriptIdent::getNamespace() const
-	{
-		return nspace;
-	}
-
-	const String &ScriptIdent::getScriptname() const
-	{
-		return sname;
-	}
-
-	bool ScriptIdent::equals(const ScriptIdent &scriptid) const
-	{
-		return nspace.equals(scriptid.getNamespace()) && sname.equals(scriptid.getScriptname());
-	}
-
-	const String ScriptIdent::toString() const
-	{
-		if(nspace.isEmpty())
-		{
-			return sname;
-		}
-
-		return nspace + ":" + sname;
-	}
-
-	ScriptIdent &ScriptIdent::operator=(const ScriptIdent& si)
-	{
-		sname = si.getScriptname();
-		nspace = si.getNamespace();
-
-		return *this;
-	}
-
 	//public class DataType
 
     DataType::DataType(uint8_t id, const String &name)
@@ -93,7 +50,7 @@ namespace Scales
 
     	}else
     	{
-    		return (t.getTypeID() == OBJECT.getTypeID()) && objectType.equals(t.getObjectType());
+    		return (t.getTypeID() == OBJECT.getTypeID()) && (objectType == t.getObjectType());
     	}
     }
 
@@ -124,12 +81,12 @@ namespace Scales
     	return equals(t); //No other types are implicitly castable, except they are equal
     }
 
-    void DataType::initObjectType(const ScriptIdent &ot)
+    void DataType::initObjectType(const ClassId &id)
     {
-    	objectType = ot;
+    	objectType = id;
     }
 
-    const ScriptIdent &DataType::getObjectType() const
+    const ClassId &DataType::getObjectType() const
     {
     	return objectType;
     }
@@ -189,7 +146,7 @@ namespace Scales
 
     	for(uint16_t i = 0; i < size; i++)
 		{
-			if(values[i].getTypeName().equals(name))
+			if(!values[i].getTypeName().compare(name))
 			{
 				return values[i];
 			}
@@ -221,83 +178,6 @@ namespace Scales
     const DataType DataType::FLOAT(2, String("float"));
     const DataType DataType::DOUBLE(3, String("double"));
     const DataType DataType::STRING(4, String("string"));
-    const DataType DataType::OBJECT(5, String("<furries rule!>"));
+    const DataType DataType::OBJECT(5, String("<I've got more rubber ducks than you!>"));
     const DataType DataType::ABSTRACT_OBJECT(6, String("object"));
-
-
-
-    //public class AccessType
-
-   /* //TODO: There are only two access types. Reduce this to a simple byte value
-    AccessType::AccessType(uint8_t id, const String &name)
-	{
-	   typeID = id;
-	   typeName = name;
-
-	   values.push_back(*this);
-	}
-
-    AccessType::AccessType(const AccessType &t)
-	{
-		typeID = t.typeID;
-		typeName = t.typeName;
-	}
-
-    AccessType &AccessType::operator=(const AccessType &t)
-	{
-		typeID = t.getTypeID();
-		typeName = t.getTypeName();
-
-		return *this;
-	}
-
-	uint8_t AccessType::getTypeID() const
-	{
-	   return typeID;
-	}
-
-	String AccessType::getTypeName() const
-	{
-	   return typeName;
-	}
-
-	bool AccessType::equals(const AccessType &t) const
-	{
-	   return (getTypeID() == t.getTypeID());
-	}
-
-	AccessType AccessType::byName(const String &name)
-	{
-		uint32_t size = values.size();
-
-		for(uint16_t i = 0; i < size; i++)
-		{
-			if(values[i].getTypeName().equals(name))
-			{
-				return values[i];
-			}
-		}
-
-		return PRIVATE;
-	}
-
-	AccessType AccessType::byID(uint8_t id)
-	{
-		uint32_t size = values.size();
-
-		for(uint16_t i = 0; i < size; i++)
-		{
-			if(values[i].getTypeID() == id)
-			{
-				return values[i];
-			}
-		}
-
-		return PRIVATE;
-	}
-
-	vector<AccessType> AccessType::values;
-
-	const AccessType AccessType::PRIVATE(0, String("private"));
-	const AccessType AccessType::PUBLIC(1, String("public"));*/
 }

@@ -2,8 +2,9 @@
 #ifndef LEXER_H_
 #define LEXER_H_
 
-#include "Nein.h"
 #include <istream>
+
+#include "ScalesUtil.h"
 
 #define CH_LINEFEED 0x0A
 #define I_DECIMAL_POINT '.'
@@ -63,6 +64,8 @@ namespace Scales
 
 		bool is(TokenType type, const String &lexem) const;
 		bool is(TokenType type, const char* lexem) const;
+		bool isLexem(const String &lexem) const;
+		bool isType(TokenType type) const;
 
 	private:
 
