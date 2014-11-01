@@ -1,11 +1,11 @@
 /*
- * Exception.cpp
+ * ScalesException.cpp
  *
  *  Created on: 28.04.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
-#include "Exception.h"
+#include "ScalesException.h"
 
 namespace Scales
 {

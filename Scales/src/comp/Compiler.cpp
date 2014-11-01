@@ -1,6 +1,7 @@
 
 #include "comp/Compiler.h"
 
+
 #ifdef SCALES_COMPILER_WRITEASM
 
 	#include <iostream>
@@ -14,6 +15,13 @@
 #endif
 
 
+#define VF_LOCAL 1
+#define VF_PRIVATE 2
+#define VF_NATIVE 4
+#define VF_STATIC 8
+#define VF_CONSTRUCTOR 16
+#define VF_PUBLIC 32 //this is not used for identifying public variables, just for error detection
+
 namespace Scales
 {
 
@@ -25,28 +33,34 @@ namespace Scales
 	//TODO: check for double declarations (not data type double but... ah, you know what I mean)
 	//TODO: currently every single variable declaration takes up one pointer in the varmem forever, even if it leaves scope somewehere. this might be optimized.
 	
-    Compiler::Compiler(istream &in, ScalesSystem *ss)
+    Compiler::Compiler()
     :
-    		scalesSystem(ss),
-    		currentClass(null),
-    		currentFunction(null),
+    		scalesSystem(null),
+    		currentClassProto(null),
+    		currentFunctionProto(null),
     		lastUID(0),
-    		lexer(in, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
+    		lexer(KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
     {
     }
 
     Compiler::~Compiler()
     {
-    	delete currentClass;
-    	delete currentFunction;
+    	delete currentClassProto; //This one is copied; we can delete it for safety
     }
 
-    void Compiler::compile()
+    Library Compiler::compile(std::istream *in, ScalesSystem *ss)
     {
-    	mainBlock();
+    	Library lib;
+
+    	lexer.setDataSource(in);
+    	scalesSystem = ss;
+
+    	mainBlock(lib);
+
+    	return lib;
     }
 
-    void Compiler::mainBlock()
+    void Compiler::mainBlock(Library &lib)
     {
     	String nspace = "";
 
@@ -57,6 +71,10 @@ namespace Scales
 			if(t.is(Token::TT_KEYWORD,"class"))
 			{
 				classDef(nspace);
+
+				lib.add(*currentClassProto); //Add the newly created class prototype to the library (it is copied) TODO: If this is null, shit gets real
+				delete currentClassProto; //We need to delete it before doing another run TODO: This is really bad style (RAII and so on). Try to improve this later (see comment above)
+				currentClassProto = null; //Set it to null so the destructor doesn't delete non-existent instances
 
 			}else if(t.is(Token::TT_KEYWORD,"namespace"))
 			{
@@ -103,7 +121,7 @@ namespace Scales
 
 		ClassId id = ClassId(nspace, t.getLexem());
 		String nativeLink;
-		Class *superclass = null;
+		ClassPrototype *superclass = null;
 
 		t = lexer.peekToken();
 		if(t.is(Token::TT_KEYWORD, "extends"))
@@ -113,12 +131,12 @@ namespace Scales
 			t = lexer.peekToken();
 			if(!t.isType(Token::TT_IDENT))
 			{
-				error("Expected script identifier after extends keyword, but found: " + t.getLexem(), t.getLine());
+				error("Expected class identifier after extends keyword, but found: " + t.getLexem(), t.getLine());
 			}
 
 			ClassId cid = classId();
 
-			superclass = scalesSystem->getClass(cid);
+			superclass = lookupClassPrototype(cid);
 
 			t = lexer.peekToken();
 		}
@@ -138,7 +156,7 @@ namespace Scales
 			t = lexer.peekToken();
 		}
 
-		currentClass = new ClassPrototype(id, superclass, nativeLink);
+		currentClassProto = new ClassSketch(id, superclass, nativeLink); //TODO: RAII!!! This is not Java!!!
 
     	writeASM("#-------Class " + id.toString() + " start ");
 
@@ -147,10 +165,10 @@ namespace Scales
     		if(t.getType() == Token::TT_IDENT) // private variable / left eval
     		{
 
-    			if(isTypeOrNamespace(t.getLexem())) //private variable
+    			if((namespaceExists(t.getLexem()) || lookupClassPrototypeByName(t.getLexem()) != null)) //private variable
 				{
 
-    				variableDec(true, false, false);
+    				variableDec(VF_PRIVATE, Scope::GLOBAL);
 
 				}else
 				{
@@ -159,75 +177,90 @@ namespace Scales
 
     		}else if(isPrimitive(t)) //private variable
     		{
-    			variableDec(true, false, false); //private, native, local
+    			variableDec(VF_PRIVATE, Scope::GLOBAL);
 
-    		}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event") || t.is(Token::TT_KEYWORD, "init")) //private function / private event /private constructor
+    		}else if(t.is(Token::TT_KEYWORD, "func")) //private function
     		{
 
-    			functionDec(true, false); //private, native
+    			functionDec(VF_PRIVATE);
 
-    		}else if(t.is(Token::TT_KEYWORD, "native")) //private native function / private native variable
+    		}else if(t.is(Token::TT_KEYWORD, "init")) //private constructor
     		{
-    			lexer.readToken();
-    			t = lexer.peekToken();
+    			functionDec(VF_PRIVATE | VF_CONSTRUCTOR);
 
-    			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable
+    		}else if(isModifier(t)) //variable / function with modifiers
+    		{
+    			uint32_t flags = 0;
+
+    			do
+    			{
+    				uint32_t flagToBeSet = 0;
+
+    				if(t.is(Token::TT_KEYWORD, "private"))
+    				{
+
+    					flagToBeSet = VF_PRIVATE;
+
+    				}else if(t.is(Token::TT_KEYWORD, "public"))
+    				{
+
+    					flagToBeSet = VF_PUBLIC;
+
+    				}else if(t.is(Token::TT_KEYWORD, "static"))
+    				{
+
+						flagToBeSet = VF_STATIC;
+
+    				}else if(t.is(Token::TT_KEYWORD, "native"))
+    				{
+
+    					flagToBeSet = VF_NATIVE;
+
+    				}else
+    				{
+    					error("[COMPILER BUG] Unknown modifier " + t.getLexem(), t.getLine());
+    				}
+
+
+    				if(flags & flagToBeSet)
+    				{
+    					error("Each modifier only allowed once per element.", t.getLine());
+    				}
+
+    				flags |= flagToBeSet;
+
+    			}while(isModifier(t));
+
+
+    			if((flags & VF_PUBLIC) && (flags & VF_PRIVATE))
 				{
-
-					variableDec(true, true, false); //private, native, local
-
-				}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //function / event
-				{
-
-					functionDec(true, true); //private, native
-
-				}else if(t.is(Token::TT_KEYWORD, "init")) //constructor
-				{
-					error("Constructors must not be native (This will change. Wait for it)", t.getLine());
-
-				}else
-				{
-					error("Unexpected token after 'native'-keyword: " + t.getLexem(), t.getLine());
+					error("Conflicting access modifiers. Element was declared both public and private.", t.getLine());
 				}
 
-    		}else if(isAccessModifier(t)) //variable / function / constructor
-    		{
-    			bool priv = t.isLexem("private");
-    			bool native = false;
+    			if((flags & VF_STATIC) && !(flags & VF_NATIVE))
+				{
+					error("Statics are only valid when native.", t.getLine());
+				}
 
-    			lexer.readToken();
-    			t = lexer.peekToken();
+    			//Now that we have collected the flags we need to check what king of element we are declaring/defining
+    			if(t.getType() == Token::TT_IDENT || isPrimitive(t))
+				{
+    				//After modifier keywords, no expressions are allowed. Therefore we assume a declaration here (otherwise the ident could be a leftEval)
 
-    			if(t.is(Token::TT_KEYWORD, "native"))
-    			{
-    				native = true;
+					variableDec(flags, Scope::GLOBAL);
 
-    				lexer.readToken();
-    				t = lexer.peekToken();
-    			}
-
-    			if(t.getType() == Token::TT_IDENT || isPrimitive(t)) // variable (since there already were keywords typical for a declaration, we don't need to check if the ident really is a type or the beginning of a left eval)
+				}else if(t.is(Token::TT_KEYWORD, "func")) //function
 				{
 
-					variableDec(priv, native, false);
-
-				}else if(t.is(Token::TT_KEYWORD, "func") || t.is(Token::TT_KEYWORD, "event")) //function / event
-				{
-
-					functionDec(priv, native);
+					functionDec(flags);
 
 				}else if(t.is(Token::TT_KEYWORD, "init")) //constructor
 				{
-					if(native)
-					{
-						error("Constructors must not be native (This will change. Wait for it)", t.getLine()); //TODO: Allow constructors beeing native
-					}
-
-					functionDec(priv, false);
+					functionDec(flags | VF_CONSTRUCTOR);
 
 				}else
 				{
-					error("Unexpected token after access modifier: " + t.getLexem(), t.getLine());
+					error("Expected function/variable or constructor declaration after modifiers, but found: " + t.getLexem(), t.getLine());
 				}
 
     		}else if(t.is(Token::TT_KEYWORD, "using"))
@@ -256,7 +289,7 @@ namespace Scales
     	asmout.reset();
     }
 
-    BlockInfo::BlockType Compiler::block(const BlockInfo &blockInfo)
+    BlockType Compiler::block(BlockType blockType, const Scope &scope)
 	{
     	uint32_t blocksInThisBlock = 0;
 
@@ -268,19 +301,19 @@ namespace Scales
 			if(t.getType() == Token::TT_IDENT) // private variable / left eval
 			{
 
-				if(isTypeOrNamespace(t.getLexem())) //private variable
+				if((namespaceExists(t.getLexem()) || lookupClassPrototypeByName(t.getLexem()) != null)) //private variable
 				{
 
-					variableDec(true, false, true);
+					variableDec(VF_LOCAL | VF_PRIVATE, scope);
 
 				}else
 				{
-					leftEval();
+					leftEval(); //If the ident is no type, it is the beginning of an expression or an error
 				}
 
 			}else if(isPrimitive(t)) //private variable
 			{
-				variableDec(true, false, true);
+				variableDec(VF_LOCAL | VF_PRIVATE, scope);
 
 			}else if(isAccessModifier(t) || t.is(Token::TT_KEYWORD, "native") || t.is(Token::TT_KEYWORD, "static"))
 			{
@@ -293,7 +326,7 @@ namespace Scales
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				block(BlockInfo(BlockInfo::BT_SUB, blockInfo.getNestID() + 1, blocksInThisBlock++, getNewUID()));
+				block(BT_SUB, Scope(scope.getNestId() + 1, blocksInThisBlock++, getNewUID()));
 
 				writeASM("END");
 				asmout << OP_END;
@@ -310,16 +343,16 @@ namespace Scales
 
 				}else
 				{
-					if(currentFunction->getReturnType().equals(DataType::NOTYPE))
+					if(currentFunctionProto->getReturnType() == DataType::DTB_NOTYPE)
 					{
 						error("Can not return a value in a void function/event. Expected semicolon after 'return' keyword", t.getLine());
 					}
 
-					ExpressionInfo info = expression();
+					ExpressionInfo info = expression(true);
 
-					if(!info.getType().canCastImplicitlyTo(currentFunction->getReturnType()))
+					if(!DataType::canCastImplicitly(info.getType(), currentFunctionProto->getReturnType()))
 					{
-						error("Type mismatch in return statement: Can not implicitly cast " + info.getType().toString() + " to " + currentFunction->getReturnType().toString(), t.getLine());
+						error("Type mismatch in return statement: Can not implicitly cast " + info.getType().toString() + " to " + currentFunctionProto->getReturnType().toString(), t.getLine());
 					}
 
 					t = lexer.readToken();
@@ -341,51 +374,51 @@ namespace Scales
 				writeASM(String("while_uid") + currentWhileUID + "_start:");
 				asmout.defineMarker(String("while_uid") + currentWhileUID + "_start");
 
-				ExpressionInfo info = expression();
+				ExpressionInfo info = expression(true);
 				if(!info.getType().isNumeric())
 				{
 					error("Loop condition in while statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", t.getLine());
 				}
 
-				writeASM(String("JUMPFALSE while_uid") + currentWhileUID + "_end");
+				writeASM(StringUtils::append("JUMPFALSE while_uid", currentWhileUID) + "_end");
 				asmout << OP_JUMPFALSE;
-				asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
+				asmout.writeMarker(StringUtils::append("while_uid", currentWhileUID) + "_end");
 
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				block(BlockInfo(BlockInfo::BT_WHILE, blockInfo.getNestID() + 1, blocksInThisBlock++, currentWhileUID));
+				block(BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
 
 				writeASM("END");
 				asmout << OP_END;
 
-				writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
+				writeASM(StringUtils::append("JUMP while_uid", currentWhileUID) + "_start");
 				asmout << OP_JUMP;
-				asmout.writeMarker(String("while_uid") + currentWhileUID + "_start");
+				asmout.writeMarker(StringUtils::append("while_uid", currentWhileUID) + "_start");
 
-				writeASM(String("while_uid") + currentWhileUID + "_end:");
-				asmout.defineMarker(String("while_uid") + currentWhileUID + "_end");
+				writeASM(StringUtils::append("while_uid", currentWhileUID) + "_end:");
+				asmout.defineMarker(StringUtils::append("while_uid", currentWhileUID) + "_end");
 
 			}else if(t.is(Token::TT_KEYWORD, "if"))
 			{
 				lexer.readToken();
 
-				ifStatement(blockInfo, blocksInThisBlock);
+				ifStatement(blockType, scope, blocksInThisBlock);
 
 			}else if(t.is(Token::TT_KEYWORD, "else"))
 			{
 				lexer.readToken();
 
-				if(blockInfo.getBlockType() == BlockInfo::BT_IF)
+				if(blockType == BT_IF)
 				{
 
-					return BlockInfo::BT_ELSE; //Returns to ifStatement(), further processing happens there
+					return BT_ELSE; //Returns to ifStatement(), further processing happens there
 
-				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSEIF)
+				}else if(blockType == BT_ELSEIF)
 				{
 
 					//Should never occur. Don't take it seriously
-					error("I don't know what you did, but somehow you did break the compiler. Here is your error code: 999999.", 0);
+					error("[Compiler bug] That isn't going to do you any good, Flynn.", t.getLine());
 
 				}else
 				{
@@ -396,18 +429,18 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				if(blockInfo.getBlockType() == BlockInfo::BT_IF)
+				if(blockType == BT_IF)
 				{
 
-					return BlockInfo::BT_ELSEIF; //Returns to ifStatement(), further processing happens there
+					return BT_ELSEIF; //Returns to ifStatement(), further processing happens there
 
-				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSEIF)
+				}else if(blockType == BT_ELSEIF)
 				{
 
 					//Should never occur. Don't take it seriously
-					error("I don't know what you did, but somehow you did break the compiler. Here is your error code: 999999.", 0);
+					error("[Compiler bug] I'm sorry, Dave. I'm afraid I can't do that.", t.getLine());
 
-				}else if(blockInfo.getBlockType() == BlockInfo::BT_ELSE)
+				}else if(blockType == BT_ELSE)
 				{
 
 					error("Else-block must be defined before else-block", t.getLine());
@@ -417,8 +450,9 @@ namespace Scales
 					error("Elseif-block must be part of if-block", t.getLine());
 				}
 
-			}else if(t.getType() == Token::TT_IDENT || t.is(Token::TT_KEYWORD, "this") || t.is(Token::TT_KEYWORD, "parent") || t.is(Token::TT_KEYWORD, "new")) //start of expression
+			}else if(t.is(Token::TT_KEYWORD, "this") || t.is(Token::TT_KEYWORD, "new") || t.is(Token::TT_OPERATOR, "(")) //start of expression
 			{
+				//this, new and openening parentheses may open expressions. If not, they are errors and detected as such by the expression parser
 
 				leftEval();
 
@@ -436,18 +470,19 @@ namespace Scales
 
 		lexer.readToken();
 
-		return BlockInfo::BT_MAIN; //Regular processing
+		return BT_FUNC; //Regular processing
 	}
 
-    //@param blockInfo This is the BlockInfo of the the block the if is encountered in. NOT of the if block itself.
-    void Compiler::ifStatement(const BlockInfo &blockInfo, uint32_t &blocksInThisBlock)
+    void Compiler::ifStatement(const BlockType &blockType, const Scope &scope, uint32_t &blocksInThisBlock)
     {
     	//Note: The concept of if block parsing was developed back in KniftoScript2 days, and I have completely forgotten if there
     	//were any better solutions that didn't make it into the implementation. Anyway, the current one messes up the whole compiler.
     	//Although this code reminds me of the wonderful holiday I had when I was thinking about advanced If blocks how they are right now, we might
     	//improve this so the code becomes more structured and clearer. TODO: Maybe improve if block parsing
 
-    	ExpressionInfo info = expression();
+    	//And also: TODO: I have a bad feeling about this function. Check if everything would work as intended
+
+    	ExpressionInfo info = expression(true);
 		if(!info.getType().isNumeric())
 		{
 			error("Condition in if statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", lexer.getCurrentLine());
@@ -455,42 +490,41 @@ namespace Scales
 
 		uint32_t currentIfUID = getNewUID();
 
-		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
+		writeASM(StringUtils::append("JUMPFALSE if_uid", currentIfUID) + "_end");
 		asmout << OP_JUMPFALSE;
-		asmout.writeMarker(String("if_uid") + currentIfUID + "_end");
-		writeASM(String("# if_uid") + currentIfUID + "_start:");
+		asmout.writeMarker(StringUtils::append("if_uid", currentIfUID) + "_end");
 		writeASM("BEGIN");
 		asmout << OP_BEGIN;
 
-		BlockInfo::BlockType bt = block(BlockInfo(BlockInfo::BT_IF, blockInfo.getNestID()+1, blocksInThisBlock++, currentIfUID));
+		BlockType bt = block(BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
 
 		writeASM("END");
 		asmout << OP_END;
 
-		if(bt == BlockInfo::BT_ELSE || bt == BlockInfo::BT_ELSEIF)
+		if(bt == BT_ELSE || bt == BT_ELSEIF)
 		{
-			writeASM(String("JUMP if_else_uid") + currentIfUID + "_end");
+			writeASM(StringUtils::append("JUMP if_else_uid", currentIfUID) + "_end");
 		}
 
 		writeASM(String("if_uid") + currentIfUID + "_end:");
 		asmout.defineMarker(String("if_uid") + currentIfUID + "_end");
 
-		if(bt == BlockInfo::BT_ELSE || bt == BlockInfo::BT_ELSEIF)
+		if(bt == BT_ELSE || bt == BT_ELSEIF)
 		{
 			writeASM(String("# if_else_uid") + currentIfUID + "_start:");
 
-			if(bt == BlockInfo::BT_ELSE)
+			if(bt == BT_ELSE)
 			{
 				writeASM("BEGIN");
 				asmout << OP_BEGIN;
 
-				block(BlockInfo(BlockInfo::BT_ELSE, blockInfo.getNestID(), blocksInThisBlock++, getNewUID()));
+				block(BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, getNewUID()));
 
 				writeASM("END");
 				asmout << OP_END;
 			}else
 			{
-				ifStatement(blockInfo, blocksInThisBlock);
+				ifStatement(blockType, scope, blocksInThisBlock);
 			}
 
 			writeASM(String("if_else_uid") + currentIfUID + "_end:");
@@ -514,9 +548,9 @@ namespace Scales
 
     	DataType type = dataType();
 
-    	if(type.getTypeID() != DataType::OBJECT.getTypeID())
+    	if(type.getTypeBase() != DataType::DTB_OBJECT)
     	{
-    		error(String("Expected script identifier after using keyword."), t.getLine());
+    		error(String("Expected class identifier after using keyword."), t.getLine());
     	}
 
     	t = lexer.readToken();
@@ -525,126 +559,39 @@ namespace Scales
     	{
     		error("Expected semicolon after using statement, but found: " + t.getLexem(), t.getLine());
     	}
+
+    	//TODO: Store the retrieved class somewhere for lookup
     }
 
     void Compiler::leftEval()
 	{
-    	ExpressionInfo left = expression(true);
+    	ExpressionInfo left = expression(false);
 
-    	Token t = lexer.peekToken();
-
-    	if(t.is(Token::TT_OPERATOR, ";"))
+    	Token t = lexer.readToken();
+    	if(!t.is(Token::TT_OPERATOR, ";"))
     	{
-    		if(left.getFactorType() != ExpressionInfo::FT_FUNCTION_RETURN)
-    		{
-    			error("Only function call expressions can be closed without an assigment", t.getLine());
-    		}
-
-    		if(!left.getType().equals(DataType::NOTYPE))
-    		{
-    			writeASM("DISCARD");
-    			asmout << OP_DISCARD;
-    		}
-
-    		lexer.readToken();
-
-    	}else if(isAssignmentOperator(t))
-    	{
-    		if(left.getFactorType() != ExpressionInfo::FT_VARIABLE_REF)
-    		{
-    			error("Can only assign to variable references", t.getLine());
-    		}
-
-    		DataType rightType = rightEval();
-
-			if(!rightType.canCastImplicitlyTo(left.getType()))
-			{
-				error("Type mismatch in assignment: Can not implicitly cast " + rightType.toString() + " to " + left.getType().toString(), t.getLine());
-			}
-
-    	}else
-    	{
-    		error("Expected assignment or semicolon after left eval, but found: " + t.getLexem(), t.getLine());
+    		error("Expected semicolon after expression, but found: " + t.getLexem(), t.getLine());
     	}
 
+    	if(left.getFactorType() != ExpressionInfo::FT_VOID)
+    	{
+    		writeASM("DISCARD");
+    		asmout << OP_DISCARD;
+    	}
 	}
 
-	DataType Compiler::rightEval()
-	{
-		Token t = lexer.readToken();
-		DataType type = DataType::NOTYPE;
-
-		if(t.is(Token::TT_OPERATOR, "="))
-		{
-			type = expression().getType();
-
-		}else
-		{
-			writeASM("COPY");
-			asmout << OP_COPY;
-
-			type = expression().getType();
-
-			if(t.is(Token::TT_OPERATOR, "+="))
-			{
-				writeASM("ADD");
-				asmout << OP_ADD;
-
-			}else if(t.is(Token::TT_OPERATOR, "-="))
-			{
-				writeASM("SUBTRACT");
-				asmout << OP_SUBTRACT;
-
-			}else if(t.is(Token::TT_OPERATOR, "*="))
-			{
-				writeASM("MULTIPLY");
-				asmout << OP_MULTIPLY;
-
-			}else if(t.is(Token::TT_OPERATOR, "/="))
-			{
-				writeASM("DIVIDE");
-				asmout << OP_DIVIDE;
-
-			}else
-			{
-				error("Unknown assign operator: " + t.getLexem() + ". This is probably not your fault.", t.getLine());
-			}
-		}
-
-		t = lexer.readToken();
-		if(!t.is(Token::TT_OPERATOR, ";"))
-		{
-			error("Expected semicolon after assignment, but found: " + t.getLexem(), t.getLine());
-		}
-
-		writeASM("POPREF");
-		asmout << OP_POPREF;
-
-		return type;
-	}
-
-	void Compiler::variableDec(bool priv, bool native, bool local)
+	void Compiler::variableDec(uint32_t varFlags, const Scope &currentScope)
 	{
 		DataType type = dataType();
 
-		Token ident = lexer.readToken();
+		Token ident = name();
 
-		if(ident.getType() != Token::TT_IDENT)
+		if(!(varFlags & VF_LOCAL) && (currentClassProto->getGlobalPrototype(ident.getLexem(), true) != null))
 		{
-			error("Expected variable name after data type, but found: " + ident.getLexem(), ident.getLine());
-		}
-
-		if(scriptSystem.isNamespaceDeclared(ident.getLexem()) || (scriptSystem.getScript(ScriptIdent("",ident.getLexem())) != null))
-		{
-			error("Variable name '" + ident.getLexem() + "' is already occupied by a script/namespace", ident.getLine());
-		}
-
-		if(!local && (currentScript->getGlobal(ident.getLexem()) != null))
-		{
-			//Globals must not override globals
+			//Globals must not override globals or overridden globals
 			error("Double declaration of variable " + ident.getLexem() + " in global scope", ident.getLine());
 
-		}else if(local && (currentScript->getLocal(ident.getLexem()) != null))
+		}else if((varFlags & VF_LOCAL) && (currentFunctionProto->getLocalPrototype(ident.getLexem(), currentScope) != null))
 		{
 			//Locals must not override locals
 			error("Double declaration of variable " + ident.getLexem() + " in local scope", ident.getLine());
@@ -653,19 +600,24 @@ namespace Scales
 
 		Token t = lexer.readToken();
 
-		VariablePrototype v = VariablePrototype(ident.getLexem(), type, priv, currentScript->getMemorySize());
-		currentScript->setMemorySize(currentScript->getMemorySize() + 1);
+		VariablePrototype v = VariablePrototype(ident.getLexem(), type, (varFlags & VF_PRIVATE), currentScope);
 
-		if(local)
+		if(varFlags & VF_STATIC)
 		{
-			currentScript->declareLocal(v);
+
+			currentClassProto->declareStaticPrototype(v);
+
+		}else if(varFlags & VF_LOCAL)
+		{
+			currentFunctionProto->declareLocalPrototype(v);
+
 		}else
 		{
-			currentScript->declareGlobal(v);
+			currentClassProto->declareGlobalPrototype(v);
 		}
 
-		//Scope is determined by callstack during runtime
-		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)priv + "," + (int)native); //TODO: Object specifier has to be included, oh and also the native flag
+		/* Removed, as variable declaration does not happen via bytecode anymore
+		writeASM("DECLAREVAR '" + ident.getLexem() + "'," + (int)type.getTypeID() + "," + (int)priv + "," + (int)native);
 
 		uint8_t flags = 0;
 		if(native)
@@ -679,13 +631,22 @@ namespace Scales
 		asmout << OP_DECLAREVAR;
 		asmout.writeTString(ident.getLexem());
 		asmout.write(flags);
-		writeDatatypeToBytecode(type);
+		writeDatatypeToBytecode(type);*/
 
 		if(t.is(Token::TT_OPERATOR, "="))
 		{
-			ExpressionInfo info = expression();
+			ExpressionInfo info(DataType(DataType::DTB_NOTYPE), true, ExpressionInfo::FT_LITERAL);
 
-			if(!info.getType().canCastImplicitlyTo(type))
+			if(varFlags & VF_STATIC)
+			{
+				info = staticExpression();
+
+			}else
+			{
+				info = expression(true);
+			}
+
+			if(!DataType::canCastImplicitly(info.getType(), type))
 			{
 				error("Type mismatch in variable initialization: Can not implicitly cast " + info.getType().toString() + " to " + type.toString(), t.getLine());
 			}
@@ -706,32 +667,12 @@ namespace Scales
 		}
 	}
 
-    void Compiler::functionDec(bool priv, bool native)
+    void Compiler::functionDec(uint32_t funcFlags)
     {
-    	//TODO: Clean up this function; see comment in constructorDec about redundant code
-    	Function::FunctionType type;
+    	Token t = lexer.readToken(); //Read the left recognizer
 
-    	Token t = lexer.readToken();
-
-    	if(t.is(Token::TT_KEYWORD, "event"))
-    	{
-    		type = Function::FT_EVENT;
-
-    	}else if(t.is(Token::TT_KEYWORD, "init"))
-    	{
-    		type = Function::FT_CONSTRUCTOR;
-
-    	}else if(t.is(Token::TT_KEYWORD, "func"))
-    	{
-    		type = Function::FT_NORMAL;
-
-    	}else
-    	{
-    		error("Called functionDec for invalid position in token stream (expected recognizer func, init or event)", t.getLine());
-    	}
-
-    	DataType returnType = DataType::NOTYPE;
-    	if(type == Function::FT_NORMAL)
+    	DataType returnType = DataType(DataType::DTB_NOTYPE);
+    	if(!(funcFlags & VF_CONSTRUCTOR))
     	{
     		t = lexer.peekToken();
 
@@ -746,32 +687,7 @@ namespace Scales
     	}
 
 
-		Token ident = (type == Function::FT_CONSTRUCTOR) ? t : lexer.readToken(); //The ident of a constructor is it's recognizer (init)
-
-		if(type != Function::FT_CONSTRUCTOR)
-		{
-			if(ident.getType() != Token::TT_IDENT)
-			{
-				if(type == Function::FT_EVENT)
-				{
-					error("Expected event name after 'event' keyword, but found: " + ident.getLexem(), ident.getLine());
-				}else
-				{
-					error("Expected function name after function return type, but found: " + ident.getLexem(), ident.getLine());
-				}
-			}
-
-			//TODO: We could replace this thing (also the checking for TT_IDENT) by a new processor function name();
-			if(scriptSystem.isNamespaceDeclared(ident.getLexem()) || (scriptSystem.getScript(ScriptIdent("",ident.getLexem())) != null))
-			{
-				error("Function name '" + ident.getLexem() + "' is already occupied by a script/namespace", ident.getLine());
-			}
-		}
-
-		if(type == Function::FT_EVENT && priv)
-		{
-			error("Only public access type is applicable for events", ident.getLine());
-		}
+		Token ident = (funcFlags & VF_CONSTRUCTOR) ? t : name(); //The ident of a constructor is it's recognizer (init)
 
 		t = lexer.readToken();
 
@@ -780,8 +696,9 @@ namespace Scales
 			error("Expected parameter list after function name, but found: " + t.getLexem(), t.getLine());
 		}
 
-		vector<DataType> paramTypes = vector<DataType>();
-		vector<String> paramNames = vector<String>();
+
+		std::vector<DataType> paramTypes;
+		std::vector<String> paramNames;
 
 		if(!lexer.peekToken().is(Token::TT_OPERATOR,")"))
 		{
@@ -792,23 +709,14 @@ namespace Scales
 
 				bool byVal = false;
 
-				t = lexer.readToken();
+				t = lexer.peekToken();
 				if(t.is(Token::TT_OPERATOR, "$"))
 				{
-					t = lexer.readToken();
-
 					byVal = true;
+					lexer.readToken(); //consume the $
 				}
 
-				if(t.getType() != Token::TT_IDENT)
-				{
-					error("Expected variable name in parameter list, but found: " + t.getLexem(), t.getLine());
-				}
-
-				if(scriptSystem.isNamespaceDeclared(t.getLexem()) || (scriptSystem.getScript(ScriptIdent("",t.getLexem())) != null))
-				{
-					error("Parameter name '" + t.getLexem() + "' is already occupied by a script/namespace", t.getLine());
-				}
+				t = name();
 
 				//Rather than creating a new vector just for the byVals, we insert the dollar into the varname for later evaluation
 				paramNames.push_back(byVal ? ("$" + t.getLexem()) : t.getLexem());
@@ -832,80 +740,49 @@ namespace Scales
 			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
 		}
 
-		if(native)
+		//We are ready to create a prototype
+		FunctionPrototype proto = FunctionPrototype(ident.getLexem(), paramTypes, returnType, funcFlags & VF_PRIVATE, funcFlags & VF_NATIVE);
+
+		//Check if function has a body
+		t = lexer.peekToken();
+		if(t.is(Token::TT_OPERATOR, ";"))
 		{
-			t = lexer.readToken();
-			if(!t.is(Token::TT_OPERATOR, ";"))
+			//This is just a function declaration, so just store the adressless prototype and carry on
+
+			currentClassProto->declareFunctionPrototype(proto);
+			return; //We are finished here (for now. this prototype needs an adress and a body, which must be supplied by the programmer)
+
+		}else if(funcFlags & VF_NATIVE) //If function is native, insist for the semicolon!
+		{
+			error(String("Native functions must not have a body. Expected semicolon after parameter list") ,t.getLine());
+		}
+
+		//Okay, function has a body. Let's turn it into bytecode and give the prototype an adress
+
+		FunctionPrototype *existingFuncProto = currentClassProto->getFunctionPrototype(ident.getLexem(), paramTypes, false); //Do not include inherited functions, we want to be able to override them!
+		if(existingFuncProto != null)
+		{
+			if(existingFuncProto->hasAdress())
 			{
-				error(String("Native functions must not have a body. Expected semicolon after parameter list") ,t.getLine());
-			}
-
-			return;
-
-			//TODO: Natives also have to be included in bytecode! And they have to be defined as prototypes!
-		}
-
-		String defInstr;
-
-		if(type == Function::FT_EVENT)
-		{
-			defInstr = String("REGISTEREVENT '") + ident.getLexem() + "'," + (String("") + (int32_t)paramNames.size()) + ",";
-			asmout << OP_REGISTEREVENT;
-
-		}else
-		{
-			defInstr = String("DECLAREFUNC '") + ident.getLexem() + "'," + returnType.getTypeID() + "," + (int)priv + "," + (String("") + (int32_t)paramNames.size()) + ",";
-			asmout << OP_DECLAREFUNC;
-		}
-
-		uint8_t flags = 0;
-		if(native)
-		{
-			flags |= 1; //TODO: Maybe store this in a macro
-		}
-		if(priv)
-		{
-			flags |= 2;
-		}
-
-		asmout.writeTString(ident.getLexem());
-		asmout.write(flags);
-		if(type != Function::FT_EVENT)
-		{
-			writeDatatypeToBytecode(returnType);
-		}
-		asmout.write(paramTypes.size());
-
-		for(uint32_t i = 0; i < paramTypes.size(); i++)
-		{
-			defInstr = defInstr + (int32_t)paramTypes[i].getTypeID();
-
-			writeDatatypeToBytecode(paramTypes[i]);
-
-			if(i < paramTypes.size()-1)
-			{
-				defInstr += ";";
+				error("Double definition of function " + FunctionPrototype::createInfoString(ident.getLexem(), paramTypes) + " in class " + currentClassProto->getClassId().toString(), ident.getLine());
 			}
 		}
 
-		if(currentScript->getFunction(ident.getLexem(), paramTypes) != null)
-		{
-			error("Double declaration of function " + Function::createInfoString(ident.getLexem(), paramTypes) + " in script " + currentScript->getIdent().toString(), ident.getLine());
-		}
 
 		int currentFunctionUID = getNewUID();
+		Scope scopeOfFuncBlock = Scope(1,0,currentFunctionUID); //nestId of 0 is reserved for globals
 
-		defInstr += ",func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start";
-		writeASM(defInstr);
-		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start");
 
-		writeASM("JUMP func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
+		writeASM("# definition of function " + FunctionPrototype::createInfoString(ident.getLexem(), paramTypes));
+		writeASM("JUMP func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
 		asmout << OP_JUMP;
-		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
+		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
 
-		//Declare function prototype so it ist available in the scriptsystem
-		Function func = Function(ident.getLexem(), paramTypes, returnType, priv, native, type, asmout.getSize());
-		currentScript->declareFunction(func);
+		//This is where the function begins
+		proto.setAdress(asmout.getSize());
+
+		currentClassProto->declareFunctionPrototype(proto);//The prototype is finished, so register it
+		currentFunctionProto = currentClassProto->getFunctionPrototype(ident.getLexem(), paramTypes); //We need a pointer to the stored prototype for changes (must not be const)
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start:");
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start");
@@ -915,29 +792,21 @@ namespace Scales
 
 		for(int i = paramTypes.size()-1; i >= 0 ; i--)
 		{
-			DataType paraType = paramTypes[i];
 			String paraName = paramNames[i];
 
-			bool byVal = paraName.startsWith("$");
+			bool byVal = StringUtils::startsWith(paraName, "$");
 			if(byVal)
 			{
 				//In the code above we inserted a dollar in front of all byValue parameters. Here we remove it
 
-				paraName = paraName.substring(1,paraName.length());
+				paraName = StringUtils::substring(paraName, 1, paraName.length());
 			}
 
 			//Declare locals prototypes
-			VariablePrototype v = VariablePrototype(paraName, paraType, true, currentScript->getMemorySize()); //Parameters are always private
-			currentScript->setMemorySize(currentScript->getMemorySize() + 1);
-			currentScript->declareLocal(v);
+			VariablePrototype v = VariablePrototype(paraName, paramTypes[i], true, scopeOfFuncBlock); //Parameters are always private
+			currentFunctionProto->declareLocalPrototype(v);
 
-			//Declare parameter variables...
-			writeASM(String("DECLAREVAR ") + paraType.getTypeID() + ",'" + paraName + "',1,0");
-			asmout << OP_DECLAREVAR;
-			asmout.writeTString(paraName);
-			asmout.write(0x02); //flag byte - private bit is always 1, native bit ist always 0
-			writeDatatypeToBytecode(paraType);
-
+			//Get the locals prototypes from stack
 			if(byVal)
 			{
 				writeASM("DEREFER");
@@ -945,16 +814,14 @@ namespace Scales
 				asmout << OP_DEREFER;
 			}
 
-			//...and get their values from the stack
 			writeASM("POPVAR '" + paraName + "'");
 			asmout << OP_POPVAR;
-			asmout.writeTString(paraName);
+			asmout.writeBString(paraName);
 		}
 
-		functionBlock(BlockIdent(BlockIdent::BT_FUNC,currentFunctionUID), returnType);
+		block(BT_FUNC, scopeOfFuncBlock);
 
-		//All locals now have lost their validity, and since we are on a single-pass compiler, we are never going to see that function again, so we can delete all the prototypes
-		currentScript->destroyAllLocals();
+		//TODO: Check if we need to output a return here
 
 		writeASM("END");
 		asmout << OP_END;
@@ -973,7 +840,7 @@ namespace Scales
 
 		int paramCount = 0;
 
-		vector<DataType> paramTypes;
+		TypeList paramTypes;
 
 		t = lexer.peekToken();
 		if(!t.is(Token::TT_OPERATOR,")"))
@@ -981,7 +848,7 @@ namespace Scales
 
 			do
 			{
-				ExpressionInfo info = expression();
+				ExpressionInfo info = expression(true);
 
 				paramTypes.push_back(info.getType());
 
@@ -1002,54 +869,64 @@ namespace Scales
 
 		if(member)
 		{
-			if(baseType.getTypeID() != DataType::OBJECT.getTypeID())
+			if(baseType.getTypeBase() != DataType::DTB_OBJECT)
 			{
 				error("Only non-abstract object types have callable member functions, but given type was: " + baseType.toString(), t.getLine());
 			}
 
-			Script *script = scriptSystem.getScript(baseType.getObjectType());
+			ClassPrototype *classProto = lookupClassPrototype(baseType.getClassId());
 
-			if(script == null)
+			if(classProto == null)
 			{
-				error("Specifier of given base type for member function call points to non-existent script: " + baseType.toString(), t.getLine());
+				error("[Compiler bug] Specifier of given base type for member function call points to non-existent class: " + baseType.toString(), t.getLine());
 			}
 
-			Function *function = script->getFunction(funcName, paramTypes);
+			FunctionPrototype *functionProto = classProto->getFunctionPrototype(funcName, paramTypes);
 
-			if(function == null)
+			if(functionProto == null)
 			{
-				error("Function '" + Function::createInfoString(funcName, paramTypes) + "' was not defined in given object type script '" + baseType.toString() + "'", t.getLine());
+				error("Function '" + FunctionPrototype::createInfoString(funcName, paramTypes) + "' was not defined in given object type class '" + baseType.toString() + "'", t.getLine());
 			}
 			
-			if(function->isPrivate())
+			if(!functionProto->hasAdress())
 			{
-				error("Function '" + Function::createInfoString(funcName, paramTypes) + "' in given object type script '" + baseType.toString() + "' is private", t.getLine());
+				error("Function '" + FunctionPrototype::createInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' was declared but never defined", t.getLine());
+			}
+
+			if(functionProto->isPrivate())
+			{
+				error("Function '" + FunctionPrototype::createInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' is private", t.getLine());
 			}
 
 			writeASM("CALLMEMBER '" + funcName + "'," + paramCount);
 			asmout << OP_CALLMEMBER;
-			asmout.writeTString(funcName);
-			asmout.write(paramCount);
+			asmout.writeBString(funcName);
+			asmout.writeUByte(paramCount);
 
-			return function->getReturnType();
+			return functionProto->getReturnType();
 
 		}else
 		{
-			Function *function = currentScript->getFunction(funcName, paramTypes);
+			FunctionPrototype *functionProto = currentClassProto->getFunctionPrototype(funcName, paramTypes, true); //Also check for functions of superclasses
 
-			if(function == null)
+			if(functionProto == null)
 			{
-				error("Function '" + Function::createInfoString(funcName, paramTypes) + "' was not defined in current script", t.getLine());
+				error("Function '" + FunctionPrototype::createInfoString(funcName, paramTypes) + "' was not defined in current class", t.getLine());
+			}
+
+			if(!functionProto->hasAdress())
+			{
+				error("Function '" + FunctionPrototype::createInfoString(funcName, paramTypes) + "' in current class was declared but never defined", t.getLine());
 			}
 
 			//No need to check for private, as we are calling from the same script
 			
-			writeASM("CALL '" + funcName + "'," + paramCount);
+			writeASM("CALL '" + funcName + "'," + paramCount); //TODO: We might direct the call to the respective superclass if it is not defined in the current one
 			asmout << OP_CALL;
-			asmout.writeTString(funcName);
-			asmout.write(paramCount);
+			asmout.writeBString(funcName);
+			asmout.writeUByte(paramCount);
 
-			return function->getReturnType();
+			return functionProto->getReturnType();
 		}
     }
 
@@ -1068,7 +945,7 @@ namespace Scales
 
     		if(t2.is(Token::TT_OPERATOR, ":"))
     		{
-    			if(!scriptSystem.isNamespaceDeclared(t.getLexem()))
+    			if(!namespaceExists(t.getLexem()))
     			{
     				error("Identifier '" + t.getLexem() + "' does not name a namespace", t.getLine());
     			}
@@ -1081,43 +958,24 @@ namespace Scales
     				error("Expected script identifier after namespace operator, but found: " + t2.getLexem(), t2.getLine());
     			}
 
-    			if(scriptSystem.getScript(ScriptIdent(t.getLexem(), t2.getLexem())) == null)
+    			if(lookupClassPrototype(ClassId(t.getLexem(), t2.getLexem())) == null)
     			{
-    				error("Identifier '" + t2.getLexem() + "' does not name a script in namespace '" + t.getLexem() + "'", t2.getLine());
+    				error("Identifier '" + t2.getLexem() + "' does not name a class in namespace '" + t.getLexem() + "'", t2.getLine());
     			}
 
-    			DataType type = DataType::OBJECT;
-    			type.initObjectType(ScriptIdent(t.getLexem(), t2.getLexem()));
-
-    			return type;
+    			return DataType(DataType::DTB_OBJECT, ClassId(t.getLexem(), t2.getLexem()));
 
     		}else
     		{
-    			//First, seach in current namespace if no namespace is given
-    			Script *scr = scriptSystem.getScript(ScriptIdent(currentScript->getIdent().getNamespace(), t.getLexem()));
+    			//No namespace given -> search the default locations
+    			ClassPrototype *classProto = lookupClassPrototypeByName(t.getLexem());
 
-    			if(scr == null)
-    			{
-    				//If not found in current namespace, search usage list
-    				scr = null; //TODO: Seach in usage list here
+				if(classProto == null)
+				{
+					error("Identifier '" + t.getLexem() + "' does not name a class in current/default/imported namespace", t.getLine());
+				}
 
-    				if(scr == null)
-    				{
-    					//If not found in usage list, seach in default namespace
-
-    					scr = scriptSystem.getScript(ScriptIdent("", t.getLexem()));
-
-    					if(scr == null)
-    					{
-    						error("Identifier '" + t.getLexem() + "' does not name a script in current/default namespace", t.getLine());
-    					}
-    				}
-    			}
-
-    			DataType type = DataType::OBJECT;
-    			type.initObjectType(scr->getIdent());
-
-    			return type;
+    			return DataType(DataType::DTB_OBJECT, classProto->getClassId()); //TODO: The class of a data type is currently pointed by name. we might point by pointer to be more efficient
     		}
 
     	}else
@@ -1125,21 +983,110 @@ namespace Scales
     		error("Expected primitve data type or script identifier, but found: " + t.getLexem(), t.getLine());
     	}
 
-    	return DataType::NOTYPE; //should never happen
+    	return DataType(DataType::DTB_NOTYPE); //should never happen
     }
 
-    ExpressionInfo Compiler::expression(const bool leftEval)
+    Token Compiler::name()
     {
-        ExpressionInfo info = relationalExpression(leftEval);
+    	Token t = lexer.readToken();
+
+    	if(t.getType() != Token::TT_IDENT)
+		{
+			error("Expected name after data type, but found: " + t.getLexem(), t.getLine());
+		}
+
+		if(namespaceExists(t.getLexem()) || (lookupClassPrototype(ClassId("",t.getLexem())) != null))
+		{
+			error("Name '" + t.getLexem() + "' is already beeing used as a classname or namespace", t.getLine());
+		}
+
+		return t;
+    }
+
+    ExpressionInfo Compiler::expression(const bool mustYieldResult)
+    {
+        ExpressionInfo leftInfo = logicExpression();
 
         Token t = lexer.peekToken();
-        while(isLogicOp(t))
+        if(isAssignmentOperator(t))
         {
-            lexer.readToken();
+        	if(leftInfo.getFactorType() != ExpressionInfo::FT_VARIABLE_REF)
+        	{
+        		error("Variable reference required on left side of assignment operator", t.getLine());
+        	}
 
-            ExpressionInfo rightInfo = relationalExpression(leftEval);
+        	writeASM("CLONE"); //This produces the result of the assignment
+        	asmout << OP_CLONE;
 
-            if(!info.getType().isNumeric())
+        	if(!t.is(Token::TT_OPERATOR, "="))
+        	{
+        		//We have a compound operator that requires a second instance of the variable reference for the pre-assign operation
+        		writeASM("CLONE");
+        		asmout << OP_CLONE;
+        	}
+
+        	ExpressionInfo rightInfo = expression(true);
+
+        	if(!DataType::canCastImplicitly(rightInfo.getType(), leftInfo.getType()))
+			{
+				error("Type mismatch in assignment: Can not implicitly cast " + rightInfo.getType().toString() + " to " + leftInfo.getType().toString(), t.getLine());
+			}
+
+			if(t.is(Token::TT_OPERATOR, "+="))
+			{
+				writeASM("ADD");
+				asmout << OP_ADD;
+
+			}else if(t.is(Token::TT_OPERATOR, "-="))
+			{
+				writeASM("SUBTRACT");
+				asmout << OP_SUBTRACT;
+
+			}else if(t.is(Token::TT_OPERATOR, "*="))
+			{
+				writeASM("MULTIPLY");
+				asmout << OP_MULTIPLY;
+
+			}else if(t.is(Token::TT_OPERATOR, "/="))
+			{
+				writeASM("DIVIDE");
+				asmout << OP_DIVIDE;
+
+			}else if(!t.is(Token::TT_OPERATOR, "="))
+			{
+				error("[Compiler bug] Unknown assignment operator: " + t.getLexem(), t.getLine());
+			}
+
+        	writeASM("POPREF"); //Pops to reference
+        	asmout << OP_POPREF;
+
+        }
+
+        if(mustYieldResult && leftInfo.getFactorType() == ExpressionInfo::FT_VOID)
+        {
+        	error("Expression must yield a value, but just contains a call to a void function", t.getLine());
+        }
+
+        return leftInfo; //The result of an assignment is the left hand side of the assignment operator (always a reference to the variable that was assigned to)
+    }
+
+    ExpressionInfo Compiler::logicExpression()
+    {
+    	ExpressionInfo info = relationalExpression();
+
+		Token t = lexer.peekToken();
+		while(isLogicOp(t))
+		{
+			if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Logic operations not possible with void type expression", t.getLine());
+			}
+
+			lexer.readToken();
+
+			ExpressionInfo rightInfo = relationalExpression();
+
+			if(!info.getType().isNumeric())
 			{
 				error(String("Left hand side of operator ") + t.getLexem() + " is of non-numeric type(" + info.getType().toString() + "), but " + t.getLexem() + " requires numeric types (representing booleans)", t.getLine());
 			}
@@ -1148,36 +1095,41 @@ namespace Scales
 				error(String("Right hand side of operator ") + t.getLexem() + " is of non-numeric type(" + rightInfo.getType().toString() +"), but " + t.getLexem() + " requires numeric types (representing booleans)", t.getLine());
 			}
 
-            info = ExpressionInfo(DataType::INT, rightInfo.isConstant() && info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //Type is always int after logic operation
+			info = ExpressionInfo(DataType(DataType::DTB_INT), rightInfo.isConstant() && info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //Type is always int after logic operation
 
-            if(t.is(Token::TT_OPERATOR,"|"))
-            {
-                writeASM("LOGICOR");
-                asmout << OP_LOGICOR;
+			if(t.is(Token::TT_OPERATOR,"|"))
+			{
+				writeASM("LOGICOR");
+				asmout << OP_LOGICOR;
 
-            }else if(t.is(Token::TT_OPERATOR,"&"))
-            {
-                writeASM("LOGICAND");
-                asmout << OP_LOGICAND;
-            }
+			}else if(t.is(Token::TT_OPERATOR,"&"))
+			{
+				writeASM("LOGICAND");
+				asmout << OP_LOGICAND;
+			}
 
-            t = lexer.peekToken();
-        }
+			t = lexer.peekToken();
+		}
 
-        return info;
+		return info;
     }
 
-    ExpressionInfo Compiler::relationalExpression(const bool leftEval)
+    ExpressionInfo Compiler::relationalExpression()
     {
-        ExpressionInfo info = arithmeticExpression(leftEval);
+        ExpressionInfo info = arithmeticExpression();
 
         Token t = lexer.peekToken();
         while(isRelationalOp(t))
         {
+        	if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Relation operations not possible with void type expression", t.getLine());
+			}
+
             lexer.readToken();
 
-            ExpressionInfo rightInfo = arithmeticExpression(leftEval);
-            info = ExpressionInfo(DataType::INT, rightInfo.isConstant() && info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //Type is always int after relation
+            ExpressionInfo rightInfo = arithmeticExpression();
+            info = ExpressionInfo(DataType(DataType::DTB_INT), rightInfo.isConstant() && info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //Type is always int after relation
 
             if(t.is(Token::TT_OPERATOR,"=="))
             {
@@ -1219,22 +1171,27 @@ namespace Scales
         return info;
     }
 
-    ExpressionInfo Compiler::arithmeticExpression(const bool leftEval)
+    ExpressionInfo Compiler::arithmeticExpression()
     {
-    	ExpressionInfo info = term(leftEval);
+    	ExpressionInfo info = term();
 
         Token t = lexer.peekToken();
         while(isAddOp(t))
         {
+        	if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Mathematic operations not possible with void type expression", t.getLine());
+			}
+
             lexer.readToken();
 
-            ExpressionInfo rightInfo = term(leftEval);
+            ExpressionInfo rightInfo = term();
 
             if(t.is(Token::TT_OPERATOR,"+"))
             {
-            	if(info.getType().equals(DataType::STRING) || rightInfo.getType().equals(DataType::STRING))
+            	if(info.getType() == DataType::DTB_STRING || rightInfo.getType() == DataType::DTB_STRING)
             	{
-            		info = ExpressionInfo(DataType::STRING, info.isConstant() && rightInfo.isConstant(), ExpressionInfo::FT_MATH_EXPR);
+            		info = ExpressionInfo(DataType(DataType::DTB_STRING), info.isConstant() && rightInfo.isConstant(), ExpressionInfo::FT_MATH_EXPR);
 
             	}else
             	{
@@ -1277,16 +1234,21 @@ namespace Scales
         return info;
     }
 
-    ExpressionInfo Compiler::term(const bool leftEval)
+    ExpressionInfo Compiler::term()
     {
-    	ExpressionInfo info = castFactor(leftEval);
+    	ExpressionInfo info = castFactor();
 
         Token t = lexer.peekToken();
         while(isMultiplyOp(t))
         {
+        	if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Mathematic operations not possible with void type expression", t.getLine());
+			}
+
             lexer.readToken();
 
-            ExpressionInfo rightInfo = castFactor(leftEval);
+            ExpressionInfo rightInfo = castFactor();
 
             if(!info.getType().isNumeric())
             {
@@ -1316,14 +1278,19 @@ namespace Scales
         return info;
     }
 
-    ExpressionInfo Compiler::castFactor(const bool leftEval)
+    ExpressionInfo Compiler::castFactor()
 	{
-		ExpressionInfo info = signedFactor(leftEval);
+		ExpressionInfo info = signedFactor();
 
 		Token t = lexer.peekToken();
 		if(t.is(Token::TT_OPERATOR,"->"))
 		{
-			if(info.getType().equals(DataType::NOTYPE))
+			if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Casts not possible with void type expression", t.getLine());
+			}
+
+			if(info.getType() == DataType::DTB_NOTYPE)
 			{
 				error("Can not cast nulltype to anything", t.getLine());
 			}
@@ -1332,17 +1299,17 @@ namespace Scales
 
 			DataType type = dataType();
 
-			if(type.getTypeID() == DataType::OBJECT.getTypeID())
+			if(type == DataType::DTB_OBJECT)
 			{
-				writeASM(String("TOOBJECTINSTANCE '") + type.getObjectType().getNamespace() + "','" + type.getObjectType().getScriptname() + "'");
+				writeASM(String("TOOBJECTINSTANCE '") + type.getClassId().getNamespace() + "','" + type.getClassId().getClassname() + "'");
 				asmout << OP_TOOBJECTINSTANCE;
-				asmout.writeTString(type.getObjectType().getNamespace());
-				asmout.writeTString(type.getObjectType().getScriptname());
+				asmout.writeBString(type.getClassId().getNamespace());
+				asmout.writeBString(type.getClassId().getClassname());
 
 			}else
 			{
-				writeASM(String("TO") + type.getTypeName().toUpperCase());
-				asmout << (OP_TOINT + type.getTypeID());
+				writeASM(String("TO") + type.getTypeBase());
+				asmout << (OP_TOINT + type.getTypeBase());
 			}
 
 			return ExpressionInfo(type, false, ExpressionInfo::FT_MATH_EXPR);
@@ -1351,7 +1318,7 @@ namespace Scales
 		return info;
 	}
 
-    ExpressionInfo Compiler::signedFactor(const bool leftEval)
+    ExpressionInfo Compiler::signedFactor()
 	{
 		bool negate = false;
 		bool invert = false;
@@ -1374,7 +1341,12 @@ namespace Scales
 			lexer.readToken();
 		}
 
-		ExpressionInfo info = memberFactor(leftEval);
+		ExpressionInfo info = memberFactor();
+
+		if(info.getFactorType() == ExpressionInfo::FT_VOID)
+		{
+			error("Unary inversion/negation not possible with void type expression", t.getLine());
+		}
 
 		if(negate)
 		{
@@ -1397,7 +1369,7 @@ namespace Scales
 			writeASM("INVERT");
 			asmout << OP_INVERT;
 
-			info = ExpressionInfo(DataType::INT, info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
+			info = ExpressionInfo(DataType(DataType::DTB_INT), info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
 		}
 
 		if(toVal)
@@ -1411,14 +1383,19 @@ namespace Scales
 		return info;
 	}
 
-    ExpressionInfo Compiler::memberFactor(const bool leftEval)
+    ExpressionInfo Compiler::memberFactor()
     {
-        ExpressionInfo info = factor(leftEval);
+        ExpressionInfo info = factor();
 
         Token t = lexer.peekToken();
         while(t.is(Token::TT_OPERATOR,"."))
         {
-        	if(info.getType().getTypeID() != DataType::OBJECT.getTypeID())
+        	if(info.getFactorType() == ExpressionInfo::FT_VOID)
+			{
+				error("Member access not possible with void type expression", t.getLine());
+			}
+
+        	if(!(info.getType().getTypeBase() == DataType::DTB_OBJECT))
 			{
 				error("Only non-abstract object types have accessible members, but given type is: " + info.getType().toString(), t.getLine());
 			}
@@ -1437,48 +1414,81 @@ namespace Scales
             {
                 DataType ftype = functionCall(member.getLexem(), true, info.getType());
 
-                if(ftype.equals(DataType::NOTYPE) && !leftEval)
-                {
-                	error("Function '" + member.getLexem() + "' of script '" + info.getType().toString()  + "' is of type void, but it was used in a value-context", member.getLine());
-                }
-
-                info = ExpressionInfo(ftype, false, ExpressionInfo::FT_FUNCTION_RETURN);
+                info = ExpressionInfo(ftype, false, (ftype == DataType::DTB_NOTYPE) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
 
             }else
             {
-            	Script *s = scriptSystem.getScript(info.getType().getObjectType());
+            	ClassPrototype *s = lookupClassPrototype(info.getType().getClassId());
 				if(s == null)
 				{
-					error("Specifier of given object type points to non-existent script '" + info.getType().toString() + "'", member.getLine());
+					error("Specifier of given object type points to non-existent class '" + info.getType().toString() + "'", member.getLine());
 				}
 
-				VariablePrototype *v = s->getGlobal(member.getLexem()); //No need to access locals
+				VariablePrototype *v = s->getGlobalPrototype(member.getLexem(), true); //No need to access locals
 				if(v == null)
 				{
-					//No need to check for universals here, as they can not be referenced through objects
-
-					error("Referenced script '" + info.getType().toString() + "' has no member '" + member.getLexem() + "'", member.getLine());
+					error("Referenced class '" + info.getType().toString() + "' has no member '" + member.getLexem() + "'", member.getLine());
 				}
 
-				if(v->isPrivate() && !s->getIdent().equals(currentScript->getIdent()))
+				if(v->isPrivate() && !(s->getClassId() == currentClassProto->getClassId()))
 				{
 					//If a private object member is accessed from a script of the same type as the object, the access modifier is ignored (like all script methods are declared as friend)
 
-					error("Variable '" + member.getLexem() + "' in referenced script '" + info.getType().toString() + "' is private", member.getLine());
+					error("Variable '" + member.getLexem() + "' in referenced class '" + info.getType().toString() + "' is private", member.getLine());
 				}
 
                 info = ExpressionInfo(v->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
 
                 writeASM("GETMEMBER '" + member.getLexem() + "'");
                 asmout << OP_GETMEMBER;
-                asmout.writeTString(member.getLexem());
+                asmout.writeBString(member.getLexem());
             }
         }
 
         return info;
     }
 
-    ExpressionInfo Compiler::factor(const bool leftEval)
+    ExpressionInfo Compiler::indexFactor()
+    {
+    	ExpressionInfo info = factor();
+
+    	Token t = lexer.peekToken();
+    	if(t.is(Token::TT_OPERATOR, "["))
+		{
+    		if(info.getFactorType() == ExpressionInfo::FT_VOID)
+    		{
+    			error("Array access not possible with void type expression", t.getLine());
+    		}
+
+    		if(info.getType().getTypeBase() != DataType::DTB_STRING)
+    		{
+    			error("Currently only strings are accessible by the [] operator", t.getLine());
+    		}
+
+			lexer.readToken();
+
+			ExpressionInfo index = expression(true);
+			if(index.getType().getTypeBase() != DataType::DTB_INT)
+			{
+				error("Invalid array index type. Array indices must be of type int", t.getLine());
+			}
+
+			writeASM("GETINDEX");
+			asmout << OP_GETINDEX;
+
+			t = lexer.readToken();
+			if(!t.is(Token::TT_OPERATOR, "]"))
+			{
+				error("Missing closing square brackets after array index expression",t.getLine());
+			}
+
+			return ExpressionInfo(info.getType(), false, ExpressionInfo::FT_VARIABLE_REF);
+		}
+
+    	return info;
+    }
+
+    ExpressionInfo Compiler::factor()
     {
         Token t = lexer.readToken();
 
@@ -1486,14 +1496,35 @@ namespace Scales
         {
             DataType numberType = getTypeOfNumberString(t.getLexem());
 
-            if(numberType.equals(DataType::NOTYPE))
+            if(numberType == DataType::DTB_NOTYPE)
             {
                 error("Number literal '" + t.getLexem() + "' does not fit in any numerical data type",t.getLine());
             }
 
-            writeASM("PUSH" + numberType.getTypeName().toUpperCase() + " " + t.getLexem());
-            asmout << OP_PUSHINT + numberType.getTypeID();
-            //TODO: Write the correct number literal to bytecode here
+            writeASM(String("PUSH ") + ((int)numberType.getTypeBase()) + ", " + t.getLexem());
+            asmout << OP_PUSHINT + numberType.getTypeBase();
+            switch(numberType.getTypeBase())
+            {
+            case DataType::DTB_INT:
+            	asmout.writeInt(parseInt(t.getLexem()));
+            	break;
+
+            case DataType::DTB_LONG:
+            	asmout.writeLong(parseLong(t.getLexem()));
+            	break;
+
+            case DataType::DTB_FLOAT:
+            	asmout.writeFloat(parseFloat(t.getLexem()));
+            	break;
+
+            case DataType::DTB_DOUBLE:
+            	asmout.writeDouble(parseDouble(t.getLexem()));
+            	break;
+
+            default:
+            	error("[Compiler bug] Unknown number type", t.getLine());
+            	break;
+            }
 
             return ExpressionInfo(numberType, true, ExpressionInfo::FT_LITERAL);
 
@@ -1501,9 +1532,9 @@ namespace Scales
         {
             writeASM("PUSHSTRING '" + escapeASMChars(t.getLexem()) + "'");
             asmout << OP_PUSHSTRING;
-            asmout.writeString(t.getLexem()); //TODO: Process escape sequences here
+            asmout.writeIString(t.getLexem()); //TODO: Process escape sequences here
 
-           return ExpressionInfo(DataType::STRING, true, ExpressionInfo::FT_LITERAL);
+           return ExpressionInfo(DataType(DataType::DTB_STRING), true, ExpressionInfo::FT_LITERAL);
 
         }else if(t.getType() == Token::TT_IDENT)
         {
@@ -1512,35 +1543,11 @@ namespace Scales
             {
                 DataType type = functionCall(t.getLexem(), false);
 
-                if(type.equals(DataType::NOTYPE) && !leftEval)
-                {
-                	error("Function '" + t.getLexem() + "' is of type void, but it was used in a value-context", t.getLine());
-                }
-
-                return ExpressionInfo(type, false, ExpressionInfo::FT_FUNCTION_RETURN);
-
-            }else if(t2.is(Token::TT_OPERATOR, "["))
-            {
-            	VariablePrototype *v = getVariableInScript(currentScript, t.getLexem());
-
-            	lexer.readToken();
-
-            	expression();
-
-            	writeASM("GETINDEX");
-            	asmout << OP_GETINDEX;
-
-            	t2 = lexer.readToken();
-				if(!t2.is(Token::TT_OPERATOR, "]"))
-				{
-					error("Missing closing square brackets after array index expression",t.getLine());
-				}
-
-				return ExpressionInfo(v->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
+                return ExpressionInfo(type, false, (type == DataType::DTB_NOTYPE) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
 
             }else
             {
-            	VariablePrototype *v = getVariableInScript(currentScript, t.getLexem());
+            	VariablePrototype *v = lookupVariablePrototype(t.getLexem());
 
 				if(v == null)
 				{
@@ -1549,14 +1556,14 @@ namespace Scales
 
                 writeASM("PUSHVAR '" + t.getLexem() + "'");
                 asmout << OP_PUSHVAR;
-                asmout.writeTString(t.getLexem());
+                asmout.writeBString(t.getLexem());
 
                 return ExpressionInfo(v->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
             }
 
         }else if(t.is(Token::TT_OPERATOR,"("))
         {
-            ExpressionInfo info = expression();
+            ExpressionInfo info = expression(true);
 
             Token t2 = lexer.readToken();
             if(!t2.is(Token::TT_OPERATOR,")"))
@@ -1580,11 +1587,11 @@ namespace Scales
 
         }*/else if(t.is(Token::TT_KEYWORD,"new"))
         {
-            DataType scripttype = dataType();
+            DataType classtype = dataType();
 
-            if(scripttype.getTypeID() != DataType::OBJECT.getTypeID())
+            if(!(classtype == DataType::DTB_OBJECT))
             {
-            	error("Expected non-abstract object type identifier after new keyword, but found: " + scripttype.toString(), t.getLine());
+            	error("Expected non-abstract object type identifier after new keyword, but found: " + classtype.toString(), t.getLine());
             }
 
 			Token t2 = lexer.readToken();
@@ -1595,7 +1602,7 @@ namespace Scales
 
 			int paramCount = 0;
 
-			vector<DataType> paramTypes = vector<DataType>();
+			TypeList paramTypes = TypeList();
 
 			t2 = lexer.peekToken();
 			if(!t2.is(Token::TT_OPERATOR,")"))
@@ -1603,7 +1610,7 @@ namespace Scales
 
 				do
 				{
-					ExpressionInfo info = expression();
+					ExpressionInfo info = expression(true);
 
 					paramTypes.push_back(info.getType());
 
@@ -1622,40 +1629,40 @@ namespace Scales
 				lexer.readToken();
 			}
 			
-			Script *script = scriptSystem.getScript(scripttype.getObjectType());
-			if(script == null)
+			ClassPrototype *cl = lookupClassPrototype(classtype.getClassId());
+			if(cl == null)
 			{
-				error("Given identifier '" + scripttype.toString() + "' in new statement does not name a type", t2.getLine());
+				error("Given identifier '" + classtype.toString() + "' in new statement does not name a type", t2.getLine());
 			}
 			
-			Function *constr = script->getFunction("init", paramTypes);
+			FunctionPrototype *constr = cl->getFunctionPrototype("init", paramTypes);
 			
 			if(constr == null)
 			{
-				error("Constructor " + Function::createInfoString(scripttype.toString(), paramTypes) + " was not declared", t2.getLine());
+				error("Constructor " + FunctionPrototype::createInfoString(classtype.toString(), paramTypes) + " was not declared", t2.getLine());
 				
 			}else
 			{
 				if(constr->isPrivate())
 				{
-					error("Constructor " + Function::createInfoString(scripttype.toString(), paramTypes) + " is private", t2.getLine());
+					error("Constructor " + FunctionPrototype::createInfoString(classtype.toString(), paramTypes) + " is private", t2.getLine());
 				}
 			
-				writeASM("NEW '" + scripttype.getObjectType().getNamespace() + "','" + scripttype.getObjectType().getScriptname() + "'," + paramCount);
+				writeASM("NEW '" + classtype.getClassId().getNamespace() + "','" + classtype.getClassId().getClassname() + "'," + paramCount);
 				asmout << OP_NEW;
-				asmout.writeTString(scripttype.getObjectType().getNamespace());
-				asmout.writeTString(scripttype.getObjectType().getScriptname());
-				asmout.write(paramCount);
+				asmout.writeBString(classtype.getClassId().getNamespace());
+				asmout.writeBString(classtype.getClassId().getClassname());
+				asmout.writeUByte(paramCount);
 			}
 
-			return ExpressionInfo(scripttype, false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are considered as functions for now
+			return ExpressionInfo(classtype, false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are actually void functions, but the new statement returns the instance, so it is considered as a non-void function call
 
         }else if(t.is(Token::TT_KEYWORD,"null"))
         {
             writeASM("PUSHNULL");
             asmout << OP_PUSHNULL;
 
-            return ExpressionInfo(DataType::OBJECT, true, ExpressionInfo::FT_LITERAL); //TODO: Re-think if NULL is really an object
+            return ExpressionInfo(DataType(DataType::DTB_NOTYPE), true, ExpressionInfo::FT_LITERAL);
 
         }else if(t.is(Token::TT_KEYWORD,"this"))
         {
@@ -1667,9 +1674,14 @@ namespace Scales
 
         	if(t.is(Token::TT_OPERATOR, "("))
         	{
+        		if(!currentFunctionProto->isConstructor())
+        		{
+        			error("Constructor delegation not possible outside of constructor", t.getLine());
+        		}
+
         		functionCall("init",false); //Calling a constructor of the current script
 
-        		return ExpressionInfo(DataType::NOTYPE, true, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors do not return anything
+        		return ExpressionInfo(DataType(DataType::DTB_NOTYPE), true, ExpressionInfo::FT_VOID); //Constructors are void functions thus returning nothing
 
         	}else
         	{
@@ -1677,11 +1689,20 @@ namespace Scales
         		writeASM("PUSHTHIS");
         		asmout << OP_PUSHTHIS;
 
-        		DataType type = DataType::OBJECT;
-        		type.initObjectType(currentScript->getIdent());
-
-        		return ExpressionInfo(type, false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
+        		return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClassProto->getClassId()), false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
         	}
+
+        }else if(t.is(Token::TT_KEYWORD,"true"))
+        {
+        	writeASM("PUSHINT 1");
+        	asmout << OP_PUSHINT;
+        	asmout.writeInt(1);
+
+        }else if(t.is(Token::TT_KEYWORD,"false"))
+        {
+        	writeASM("PUSHINT 0");
+        	asmout << OP_PUSHINT;
+        	asmout.writeInt(0);
 
         }else if(t.getType() == Token::TT_EOF)
         {
@@ -1692,7 +1713,7 @@ namespace Scales
             error("Unexpected token in expression factor: " + t.getLexem(), t.getLine());
         }
 
-        return ExpressionInfo(DataType::NOTYPE, false, ExpressionInfo::FT_LITERAL); //Should never happen
+        return ExpressionInfo(DataType(DataType::DTB_NOTYPE), false, ExpressionInfo::FT_LITERAL); //Should never happen
     }
 
     /*ArrayType Compiler::arrayLiteral()
@@ -1729,43 +1750,30 @@ namespace Scales
     	return ArrayType(&type, elementCount);
     }*/
 
-    VariablePrototype *Compiler::getVariableInScript(Script *s, const String &name)
-    {
-    	VariablePrototype *v = s->getLocal(name);
-
-		if(v == null)
-		{
-			v = s->getGlobal(name);
-		}
-
-		return v;
-
-    }
-
     void Compiler::writeDatatypeToBytecode(const DataType &t)
     {
-    	uint8_t id = t.getTypeID();
+    	uint8_t id = t.getTypeBase();
 
     	if(t.isArray())
     	{
     		id |= 8;
     	}
 
-    	asmout.write(id);
+    	asmout.writeUByte(id);
 
-    	if(t.getTypeID() == DataType::OBJECT.getTypeID())
+    	if(t == DataType::DTB_OBJECT)
     	{
-    		asmout.writeTString(t.getObjectType().getNamespace());
-    		asmout.writeTString(t.getObjectType().getScriptname());
+    		asmout.writeBString(t.getClassId().getNamespace());
+    		asmout.writeBString(t.getClassId().getClassname());
     	}
     }
 
     DataType Compiler::getTypeOfNumberString(const String &s)
     {
-    	bool fp = (s.indexOf('.') != -1);
+    	bool fp = (StringUtils::indexOf(s, '.') != -1);
 
     	//TODO: Consider big types here
-    	return fp ? DataType::FLOAT : DataType::INT;
+    	return fp ? DataType(DataType::DTB_FLOAT) : DataType(DataType::DTB_INT);
     }
 
     bool Compiler::isAddOp(const Token &t)
@@ -1793,9 +1801,9 @@ namespace Scales
     	return t.is(Token::TT_OPERATOR,"=") || t.is(Token::TT_OPERATOR,"+=") || t.is(Token::TT_OPERATOR,"-=") || t.is(Token::TT_OPERATOR,"*=") || t.is(Token::TT_OPERATOR,"/=");
     }
 
-    bool Compiler::isAccessModifier(const Token &t)
+    bool Compiler::isModifier(const Token &t)
     {
-    	return t.is(Token::TT_KEYWORD, "public") || t.is(Token::TT_KEYWORD, "private");
+    	return t.is(Token::TT_KEYWORD, "public") || t.is(Token::TT_KEYWORD, "private") || t.is(Token::TT_KEYWORD, "native") || t.is(Token::TT_KEYWORD, "static");
     }
 
     bool Compiler::isPrimitive(const Token &t)
@@ -1808,20 +1816,13 @@ namespace Scales
     	for(uint16_t i = 0; i < DATATYPE_COUNT; i++)
     	{
 
-    		if(t.getLexem().equals(DATATYPES[i]))
+    		if(t.getLexem() == DATATYPES[i])
     		{
     			return true;
     		}
     	}
 
     	return false;
-    }
-
-    bool Compiler::isTypeOrNamespace(const String &s)
-    {
-    	return scriptSystem.isNamespaceDeclared(s) ||
-    			scriptSystem.getScript(ScriptIdent(currentScript->getIdent().getNamespace(), s)) != null ||
-    			scriptSystem.getScript(ScriptIdent("",s)) != null;
     }
 
     String Compiler::escapeASMChars(const String &s)
@@ -1834,6 +1835,92 @@ namespace Scales
     uint32_t Compiler::getNewUID()
     {
     	return ++lastUID;
+    }
+
+    int32_t Compiler::parseInt(const String &s)
+    {
+    	int32_t v = 0;
+
+    	for(uint32_t i = 0; i < s.length(); i++)
+    	{
+    		v += s[i] - '0';
+    		v *= 10;
+    	}
+
+    	return v;
+    }
+
+    int64_t Compiler::parseLong(const String &s)
+    {
+    	int64_t v = 0;
+
+		for(uint32_t i = 0; i < s.length(); i++)
+		{
+			v += s[i] - '0';
+			v *= 10;
+		}
+
+		return v;
+    }
+
+    float Compiler::parseFloat(const String &s)
+    {
+    	float v = 0;
+    	bool decimals = false;
+    	float decimalFactor = 0.1f;
+
+		for(uint32_t i = 0; i < s.length(); i++)
+		{
+			if(s[i] == '.')
+			{
+				decimals = true;
+
+			}else
+			{
+				if(decimals)
+				{
+					v += ((double)(s[0] - '0')) * decimalFactor;
+					decimalFactor *= 0.1;
+
+				}else
+				{
+					v += s[i] - '0';
+					v *= 10;
+				}
+			}
+		}
+
+		return v;
+    }
+
+    double Compiler::parseDouble(const String &s)
+    {
+    	double v = 0;
+		bool decimals = false;
+		double decimalFactor = 0.1f;
+
+		for(uint32_t i = 0; i < s.length(); i++)
+		{
+			if(s[i] == '.')
+			{
+				decimals = true;
+
+			}else
+			{
+				if(decimals)
+				{
+					v += ((double)(s[0] - '0')) * decimalFactor;
+					decimalFactor *= 0.1;
+
+				}else
+				{
+					v += s[i] - '0';
+					v *= 10;
+				}
+			}
+		}
+
+		return v;
     }
 
     void Compiler::error(const String &s, int line)
@@ -1852,10 +1939,9 @@ namespace Scales
 			"public",
 			"private",
 			"func",
-			"event",
 			"native",
 			"void",
-			"script",
+			"class",
 			"static",
 			"links",
 			"extends",
@@ -1868,10 +1954,11 @@ namespace Scales
 			"break",
 			"null",
 			"this",
-			"parent",
 			"goto",
 			"new",
 			"init",
+			"true",
+			"false",
 
 			"int",
 			"long",
@@ -1949,24 +2036,4 @@ namespace Scales
     	return dataType;
     }
 
-
-    //private class BlockIdent
-
-    BlockIdent::BlockIdent(BlockIdent::BlockType pType, uint32_t pUid)
-    :
-    		type(pType),
-    		uid(pUid)
-    {
-
-    }
-
-    BlockIdent::BlockType BlockIdent::getBlockType() const
-    {
-    	return type;
-    }
-
-    uint32_t BlockIdent::getUID() const
-    {
-    	return uid;
-    }
 }

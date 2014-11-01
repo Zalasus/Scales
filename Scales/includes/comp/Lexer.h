@@ -1,10 +1,18 @@
 
+namespace Scales
+{
+	class Token;
+	class Lexer;
+}
+
 #ifndef LEXER_H_
 #define LEXER_H_
 
-#include <istream>
-
 #include "ScalesUtil.h"
+#include "ScalesException.h"
+#include <cstdio>
+#include <iostream>
+#include <istream>
 
 #define CH_LINEFEED 0x0A
 #define I_DECIMAL_POINT '.'
@@ -15,8 +23,6 @@
 
 #define ALPHAS String("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_")
 #define NUMBERS String("0123456789")
-
-using std::istream;
 
 namespace Scales
 {
@@ -79,13 +85,18 @@ namespace Scales
 	};
 
 
-
+	/**
+	 * Stateful lexer
+	 */
     class Lexer
     {
     public:
 
-        Lexer(istream &in, const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);
+        Lexer(const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);
         ~Lexer();
+
+        void setDataSource(std::istream *in);
+        void reset();
 
         Token readToken();
 
@@ -116,7 +127,7 @@ namespace Scales
         void lexerError(const char* message);
 
 
-        istream &input;
+        std::istream *input;
 
         int lchar; //Declared as int, as istream does not use stdint, so that int could mean anything, but we want lchar to be the same type as istream.get()
         Token nextToken;

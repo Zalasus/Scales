@@ -2,7 +2,7 @@
  * Scales.h
  *
  *  Created on: 06.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
 //Farewell, Java, old friend. I've found comfort in your arms, you've carried me for miles. But it's time to move on.

@@ -2,9 +2,8 @@
  * ScalesVariable.cpp
  *
  *  Created on: 09.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
-
 
 #include "ScalesVariable.h"
 
@@ -56,7 +55,7 @@ namespace Scales
 	const Scope Scope::GLOBAL(0,0,0);
 
 
-	VariablePrototype::VariablePrototype(const String &pName, const DataType &pType, bool pPriv, const Scope &pScope)
+	VariableSketch::VariableSketch(const String &pName, const DataType &pType, bool pPriv, const Scope &pScope)
 		: name(pName),
 		  type(pType),
 		  priv(pPriv),
@@ -65,31 +64,57 @@ namespace Scales
 
 	}
 
-	String VariablePrototype::getName() const
+	String VariableSketch::getName() const
 	{
 		return name;
 	}
 
-	DataType VariablePrototype::getType() const
+	DataType VariableSketch::getType() const
 	{
 		return type;
 	}
 
-	bool VariablePrototype::isPrivate() const
+	bool VariableSketch::isPrivate() const
 	{
 		return priv;
 	}
 
-	Scope VariablePrototype::getScope() const
+	Scope VariableSketch::getScope() const
 	{
 		return scope;
 	}
 
 
-	Variable::Variable(VariablePrototype *proto)
-		: prototype(proto)
+	Variable::Variable(const VariableSketch &pSketch, ScalesSystem *system)
+		: sketch(pSketch),
+		  value(null) //All variables are null by default
 	{
 
+	}
+
+	VariableSketch Variable::getSketch() const
+	{
+		return sketch;
+	}
+
+	ValuePtr *Variable::getValuePtr() const
+	{
+		return value;
+	}
+
+	void Variable::assignByReference(ValuePtr *v)
+	{
+		if(value != null)
+		{
+			value->removeUser(this);
+		}
+
+		if(v != null)
+		{
+			v->addUser(this);
+		}
+
+		value = v;
 	}
 
 }

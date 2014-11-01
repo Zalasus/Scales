@@ -1,0 +1,79 @@
+
+
+namespace Game;
+
+class Display links ru_display
+
+	public static native func void message(string msg);
+
+end
+
+class Item links ru_item
+
+	public static native func Item byName(string name);
+	
+end
+
+class Actor links ru_actor
+
+end
+
+class Inventory links ru_inventory
+
+	public native func int getItemCount(Item i);
+	
+	public native func void addItem(Item i, int count);
+	
+	public native func void removeItem(Item i, int count);
+	
+	public func void removeItem(Item i)
+		removeItem(i, getItemCount(i));
+	end
+
+end
+
+class Player extends Actor links ru_layer
+
+	public native func Inventory getInventory();
+	
+end
+
+
+
+
+namespace mod_transmuteSpell;
+
+
+class TransmuteSpell extends Game:Spell
+
+	private Game:Item fromItem = Game:Item.byName("bottled_water");
+	private Game:Item toItem = Game:Item.byName("wine_upper");
+
+	
+	event onCast(Game:Actor caster)
+	
+		Game:Player player = caster -> Game:Player;
+		
+		
+		if(player != null) #Spell was cast by player
+		
+			Game:Inventory inv = player.getInventory();
+			
+			int itemCount = inv.getItemCount(fromItem);
+			
+			if(itemCount > 0)
+			
+				inv.removeItem(fromItem);
+				inv.addItem(toItem, itemCount);
+		
+				Game:Display.message("You successfully turned water into wine!");
+		
+			end
+		
+		end
+	
+	end
+
+end
+
+

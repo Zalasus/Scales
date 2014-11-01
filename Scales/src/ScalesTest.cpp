@@ -2,7 +2,7 @@
  * ScalesTest.cpp
  *
  *  Created on: 30.03.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
 #include <iostream>
@@ -10,12 +10,26 @@
 
 #include <time.h>
 
+#include "ScalesSystem.h"
+
 #include "comp/Lexer.h"
 #include "comp/Compiler.h"
-#include "DataType.h"
-#include "Exception.h"
+#include "ScalesException.h"
 
-using namespace Scales;
+void doStuff()
+{
+	Scales::ScalesSystem ss;
+
+	std::istream in;
+
+	Scales::Compiler compiler;
+	Scales::Library l = compiler.compile(&in, &ss);
+
+	ss.loadLibrary(l);
+
+
+
+}
 
 int main()
 {
@@ -28,33 +42,17 @@ int main()
 
 	if(in.is_open())
 	{
-		ScriptSystem ss;
+		Scales::ScalesSystem ss;
 
-		Compiler *c = new Compiler(in, ss);
+		Scales::Compiler c;
 
 		try
 		{
-			c->compile();
+			c.compile(&in, &ss);
 
-		}catch(ScalesException &e)
+		}catch(Scales::ScalesException &e)
 		{
 			std::cerr << e.getMessage() << std::endl;
-		}
-
-		delete c;
-
-		ScriptIdent ident = ScriptIdent("Main");
-
-		Script *scr = ss.getScript(ident);
-
-		if(scr == null)
-		{
-			std::cerr << "The script " << ident.toString() << " was not declared in the script system" << std::endl;
-
-		}else
-		{
-			std::cout << "The script " << ident.toString() << " contains " << scr->getBytecodeLength() << " bytes of bytecode." << std::endl;
-
 		}
 
 	}

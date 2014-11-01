@@ -2,20 +2,30 @@
  * ScalesClass.h
  *
  *  Created on: 06.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
+
+namespace Scales
+{
+	class ClassId;
+	class ClassPrototype;
+	class Class;
+}
 
 #ifndef SCALESCLASS_H_
 #define SCALESCLASS_H_
 
 #include "ScalesUtil.h"
-#include "ScalesObject.h"
 #include "ScalesType.h"
 #include "ScalesFunction.h"
+#include "ScalesSystem.h"
 #include "ScalesVariable.h"
+#include "ScalesConstants.h"
 
 namespace Scales
 {
+
+	typedef std::vector<DataType> TypeList;
 
 	class ClassId
 	{
@@ -27,7 +37,9 @@ namespace Scales
 
 		String toString() const;
 
-		bool operator==(const ClassId &left, const ClassId &right) const;
+		bool operator==(const ClassId &right) const;
+
+		static const ClassId EMPTY;
 
 	private:
 
@@ -35,49 +47,83 @@ namespace Scales
 		String space;
 	};
 
-
-	//This classes state may change after it is created
-	class ClassPrototype
+	/*
+	 * This class contains all the declarations in a class like they are made in source.
+	 * It can be compared to a header file in memory, and is the only thing needed for compiling
+	 * other sources referencing to the class it is representing.
+	 *
+	 * Bytecode may be coupled with this container, which is required for creating runtime class
+	 * instances of it. If no bytecode is included, it just serves prototyping purposes.
+	 *
+	 * This classes state may change after it is created.
+	 */
+	class ClassSketch
 	{
 	public:
-		ClassPrototype(const ClassId &pId, Class *superclass, const String &nativeLinkTarget);
+		ClassSketch(const ClassId &pId, ClassSketch *pSuperclass, const String &pNativeLinkTarget);
 
 		ClassId getClassId() const;
-		const Class *getSuperclass() const;
+		ClassSketch *getSuperclass() const;
 		String getNativeLinkTarget() const;
 
-		void declareGlobalPrototype(const VariablePrototype &proto);
-		VariablePrototype getGlobalPrototype(const String &name, bool recursive = false);
-		const std::vector<VariablePrototype> getGlobalPrototypes(bool recursive = false);
+		void declareGlobal(const VariableSketch &proto);
+		VariableSketch *getGlobal(const String &name, bool recursive = false);
+		const std::vector<VariableSketch> getGlobals(bool recursive = false);
+		uint32_t getGlobalCount() const;
 
-		void declareStaticPrototype(const VariablePrototype &proto);
-		VariablePrototype getStaticPrototype(const String &name, bool recursive = false); //According to the Scales v1 specification, statics are not inherited. Therefore the recursive param is ignored
-		const std::vector<VariablePrototype> getStaticPrototypes(bool recursive = false); //It is, however, still provided as later language versions may allow static inheritance
+		void declareFunction(const FunctionSketch &proto);
+		FunctionSketch *getFunction(const String &name, const TypeList &paramTypes, bool recursive = false);
+		uint32_t getFunctionCount() const;
+
+		bool isComplete();
+
+		/**
+		 * Calculates the amount of value pointers required in an instance of this class.
+		 * This basically equals the amount of non-native variables in this class.
+		 */
+		uint32_t getSize() const;
 
 	private:
 
-		std::vector<VariablePrototype> globals;
-		std::vector<VariablePrototype> statics;
+		ClassId classId;
+		ClassSketch *superclass;
+		String nativeLinkTarget;
+
+		std::vector<VariableSketch> globals;
+
+		std::vector<FunctionSketch> functions;
 	};
 
 
-	//This classes state must be unchanged after it is created (except for variable values, if you count them as state of the class)
+	class Object; //Forward declaration from ScalesObject.h (as of cross reference)
+
+	/*
+	 * This class creates data needed for execution like memory-mappings
+	 * from the clear-structured ClassSketch
+	 *
+	 * This classes state must be unchanged after it is created
+	 * (except for variable values)
+	 */
 	class Class
 	{
 	public:
-		Class(const ClassPrototype &proto, ScalesSystem *system);
+		Class(const ClassSketch &pSketch, ScalesSystem *pSystem);
 		~Class();
 
-		ClassPrototype getPrototype() const;
+		ClassSketch getSketch() const;
+		ScalesSystem *getSystem() const;
 
-		Object *createInstance() const;
+		FunctionHandle *getStaticHandle(const String &name, const TypeList &paramTypes);
+
+		Object *createInstance();
 
 	private:
 
-		ClassPrototype prototype;
+		Class(const Class &c); //This class is not copyable
 
-		ScalesSystem *parentSystem;
+		ClassSketch sketch;
 
+		ScalesSystem *system;
 	};
 
 }

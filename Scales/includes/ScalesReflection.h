@@ -2,8 +2,13 @@
  * ScalesReflection.h
  *
  *  Created on: 06.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
+
+namespace Scales
+{
+	class LinkedClass;
+}
 
 #ifndef SCALESREFLECTION_H_
 #define SCALESREFLECTION_H_
@@ -12,6 +17,18 @@
 
 namespace Scales
 {
+
+	/**
+	 * Class that is extended by all classes that should be able to be linked to scripts
+	 */
+	class LinkedClass
+	{
+
+	};
+
+
+	// \/ old     /\ new
+
 	class LinkedVariable
 	{
 	public:
@@ -62,8 +79,5 @@ namespace Scales
 
 #define SCALES_EXPOSE_VAR(varname, varptr) vars.push_back(new Scales::LinkedVariable(#varname, &varptr));
 
-SCALES_EXPOSE_BEGIN(_foo, Scales::foo)
-
-SCALES_EXPOSE_END(_foo, Scales::foo)
 
 #endif /* SCALESREFLECTION_H_ */

@@ -2,24 +2,23 @@
  * ScalesObject.cpp
  *
  *  Created on: 10.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
-
 
 #include "ScalesObject.h"
 
 namespace Scales
 {
 
-	Object::Object(const Class *pClass)
+	Object::Object(Class *pClass)
 		: myClass(pClass)
 	{
 		//Allocate all global variables, including the ones of all the superclasses
 
-		const std::vector<VariablePrototype*> globalProtos = myClass->getGlobals(true);
+		const std::vector<VariablePrototype> globalProtos = myClass->getPrototype().getGlobalPrototypes(true);
 		for(uint32_t i = 0; i < globalProtos.size(); i++)
 		{
-			Variable *v = new Variable(globalProtos[i]);
+			Variable *v = new Variable(globalProtos[i], pClass->getParentSystem());
 			variables.push_back(v);
 		}
 	}
@@ -46,11 +45,13 @@ namespace Scales
 	{
 		for(uint32_t i = 0; i < variables.size(); i++)
 		{
-			if(variables[i]->getPrototype()->getName() == name)
+			if(variables[i]->getPrototype().getName() == name)
 			{
 				return variables[i];
 			}
 		}
+
+		return null;
 	}
 
 }

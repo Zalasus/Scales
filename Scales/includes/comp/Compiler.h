@@ -1,52 +1,35 @@
 
+namespace Scales
+{
+	class ExpressionInfo;
+	class Compiler;
+}
+
 #ifndef COMPILER_H_
 #define COMPILER_H_
 
-#include <istream>
-
 #include "ScalesSystem.h"
+#include "ScalesLibrary.h"
 #include "ScalesUtil.h"
-
-#include "DataType.h"
-#include "Compiler.h"
+#include "ScalesType.h"
+#include "ScalesVariable.h"
 #include "Lexer.h"
-#include "Exception.h"
+#include "ScalesException.h"
 #include "ASMStream.h"
 
-using std::istream;
+#include <istream>
 
 namespace Scales
 {
 
-	class BlockInfo
+	enum BlockType
 	{
-	public:
-
-		enum BlockType
-		{
-			BT_MAIN,
-			BT_FUNC,
-			BT_IF,
-			BT_ELSEIF,
-			BT_ELSE,
-			BT_WHILE,
-			BT_SUB
-		};
-
-		BlockInfo(BlockType pType, uint32_t pUid, uint32_t pNid, uint32_t pRid);
-
-		uint32_t getUID() const;
-		uint32_t getNestID() const;
-		uint32_t getRowID() const;
-
-		BlockType getBlockType() const;
-
-	private:
-
-		BlockType type;
-		uint32_t uid;
-		uint32_t nid;
-		uint32_t rid;
+		BT_FUNC,
+		BT_IF,
+		BT_ELSEIF,
+		BT_ELSE,
+		BT_WHILE,
+		BT_SUB
 	};
 
 	class ExpressionInfo
@@ -57,6 +40,7 @@ namespace Scales
 		{
 			FT_VARIABLE_REF,
 			FT_FUNCTION_RETURN,
+			FT_VOID,
 			FT_LITERAL,
 			FT_MATH_EXPR
 
@@ -86,49 +70,59 @@ namespace Scales
     {
     public:
 
-        Compiler(istream &in, ScalesSystem *ss);
-
+        Compiler();
         ~Compiler();
 
-        void compile();
+        Library compile(std::istream *in, ScalesSystem *ss);
 
     private:
 
-        Lexer lexer;
-
         ScalesSystem *scalesSystem;
-        ClassPrototype *currentClass;
-        FunctionPrototype *currentFunction;
+        ClassSketch *currentClassProto;
+        FunctionSketch *currentFunctionProto;
 
         uint32_t lastUID;
 
-        void mainBlock();
-        void classDef(const String &nspace);
-        void functionDec(bool priv, bool native);
-        BlockInfo::BlockType block(const BlockInfo &blockInfo);
+        Lexer lexer;
 
-        void ifStatement(const BlockInfo &blockInfo, uint32_t &blocksInThisBlock);
+
+        void mainBlock(Library &lib);
+        void classDef(const String &nspace);
+        void functionDec(uint32_t funcFlags);
+        /**
+         * @returns The type of block that should start right after conclusion of this block (used for nested if block handling)
+         */
+        BlockType block(BlockType blockType, const Scope &scope);
+
+        /**
+         * @param blockType This is the BlockType of the the block the if is encountered in. NOT of the if block itself.
+         */
+        void ifStatement(const BlockType &blockType, const Scope &scope, uint32_t &blocksInThisBlock);
 
         void usingStatement();
 
-        void variableDec(bool priv, bool native, bool local);
+        void variableDec(uint32_t varFlags, const Scope &currentScope);
 
         void leftEval();
-        DataType rightEval();
 
-        ExpressionInfo expression(const bool leftEval = false);
-        ExpressionInfo relationalExpression(const bool leftEval = false);
-        ExpressionInfo arithmeticExpression(const bool leftEval = false);
-        ExpressionInfo term(const bool leftEval = false);
-        ExpressionInfo castFactor(const bool leftEval = false);
-        ExpressionInfo signedFactor(const bool leftEval = false);
-        ExpressionInfo memberFactor(const bool leftEval = false);
-        ExpressionInfo factor(const bool leftEval = false);
+        ExpressionInfo expression(const bool mustYieldResult);
+        ExpressionInfo logicExpression();
+        ExpressionInfo relationalExpression();
+        ExpressionInfo arithmeticExpression();
+        ExpressionInfo term();
+        ExpressionInfo castFactor();
+        ExpressionInfo signedFactor();
+        ExpressionInfo memberFactor();
+        ExpressionInfo indexFactor();
+        ExpressionInfo factor();
 
-        DataType functionCall(const String &funcName, bool member, const DataType &baseType = DataType::NOTYPE);
+        ExpressionInfo staticExpression();
+
+        DataType functionCall(const String &funcName, bool member, const DataType &baseType = DataType(DataType::DTB_NOTYPE));
 
         DataType dataType();
         ClassId classId();
+        Token name();
 
         DataType getTypeOfNumberString(const String &numberString);
 
@@ -136,7 +130,20 @@ namespace Scales
 
         uint32_t getNewUID();
 
-        VariablePrototype *getVariableInClass(Class *s, const String &name);
+        bool namespaceExists(const String &nspace);
+        /**
+         * Searches the library beeing built right now and the system for a specific prototype.
+         */
+        ClassPrototype *lookupClassPrototype(const ClassId &cid);
+        /**
+         * Searches for a specific classname in the following namespaces: usage list -> current namespace -> default namespace
+         */
+        ClassPrototype *lookupClassPrototypeByName(const String &name);
+        /**
+         * Searches for a specific variable in the following scopes: local -> global -> static
+         */
+        VariableSketch *lookupVariablePrototype(const String &name);
+
         void writeDatatypeToBytecode(const DataType &t);
 
         bool isLogicOp(const Token &t);
@@ -145,13 +152,18 @@ namespace Scales
         bool isMultiplyOp(const Token &t);
         bool isAssignmentOperator(const Token &t);
 
+        bool isModifier(const Token &t);
         bool isAccessModifier(const Token &t);
 
         bool isPrimitive(const Token &t);
-        bool isTypeOrNamespace(const String &t);
 
         void error(const String &message, int line);
 
+
+        int32_t parseInt(const String &s);
+        int64_t parseLong(const String &s);
+        float parseFloat(const String &s);
+        double parseDouble(const String &s);
 
         ASMStream asmout;
 

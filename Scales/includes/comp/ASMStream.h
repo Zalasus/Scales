@@ -2,8 +2,14 @@
  * ASMStream.h
  *
  *  Created on: 14.05.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
+
+namespace Scales
+{
+	class ByteArrayOutputStream;
+	class ASMStream;
+}
 
 #ifndef ASMSTREAM_H_
 #define ASMSTREAM_H_
@@ -12,8 +18,6 @@
 #include "Bytecode.h"
 
 #include <unordered_map>
-
-using std::unordered_map;
 
 namespace Scales
 {
@@ -45,12 +49,21 @@ namespace Scales
 	{
 	public:
 
-		void write(uint8_t b);
+		void writeUByte(uint8_t b);
+
 		void writeUShort(uint16_t s);
+
 		void writeUInt(uint32_t i);
-		void writeString(const String &s);
+		inline void writeInt(int32_t i){ writeUInt(static_cast<uint32_t>(i)); }
+
+		void writeLong(int64_t i);
+
+		void writeFloat(float f);
+		void writeDouble(double d);
+
+		void writeIString(const String &s);
 		void writeSString(const String &s);
-		void writeTString(const String &s);
+		void writeBString(const String &s);
 
 		void defineMarker(const String &name, uint32_t adress);
 		void defineMarker(const String &name);
@@ -73,8 +86,8 @@ namespace Scales
 
 		ByteArrayOutputStream stream;
 
-		unordered_map<String, uint32_t> definedMarkers;
-		unordered_map<uint32_t, String> requestedMarkers;
+		std::unordered_map<String, uint32_t> definedMarkers;
+		std::unordered_map<uint32_t, String> requestedMarkers;
 
 	};
 }

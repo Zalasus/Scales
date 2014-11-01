@@ -2,9 +2,8 @@
  * ScalesReflection.cpp
  *
  *  Created on: 06.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
-
 
 #include "ScalesReflection.h"
 

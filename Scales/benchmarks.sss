@@ -1,0 +1,39 @@
+# Set of benchmarks
+
+# scales benchmark test script ported by Zalasus
+
+script benchmark uses System:Out
+
+
+	private func int Ack(int M, int N)
+	
+		if (M == 0)
+
+			N = N+1;
+			return N;
+		end
+
+		if (N == 0)
+		
+			M = M-1;
+			return Ack(M, 1);
+		end
+		
+		N = N-1;
+		return Ack(M-1, Ack(M, N));
+		
+	end
+
+	private func fib(int n)
+	
+		if (n < 2)
+		
+			return 1;
+			
+		end
+		
+		return fib(n-2) + fib(n-1);
+		
+	end
+	
+end

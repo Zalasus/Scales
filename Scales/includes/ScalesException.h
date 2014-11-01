@@ -2,13 +2,18 @@
  * Exception
  *
  *  Created on: 28.04.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
-#ifndef EXCEPTION_H_
-#define EXCEPTION_H_
+namespace Scales
+{
+	class ScalesException;
+}
 
-#include "Nein.h"
+#ifndef SCALESEXCEPTION_H_
+#define SCALESEXCEPTION_H_
+
+#include "ScalesUtil.h"
 
 namespace Scales
 {
@@ -37,4 +42,4 @@ namespace Scales
 }
 
 
-#endif /* EXCEPTION_H_ */
+#endif /* SCALESEXCEPTION_H_ */

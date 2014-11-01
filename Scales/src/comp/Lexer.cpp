@@ -1,21 +1,15 @@
 
-
-#include <cstdio>
-#include <iostream>
-
 #include "comp/Lexer.h"
-
-#include "Exception.h"
-
 
 namespace Scales
 {
 
 	//public class lexer
 
-    Lexer::Lexer(istream &pInput, const String *pKeywords, const uint32_t pKeywordCount, const String *pOperators, const uint32_t pOperatorCount, const bool pIgnoreComments)
+    Lexer::Lexer(const String *pKeywords, const uint32_t pKeywordCount, const String *pOperators, const uint32_t pOperatorCount, const bool pIgnoreComments)
     :
-    		input(pInput),
+    		input(null),
+    		lchar(EOF),
     		keywords(pKeywords),
     		keywordCount(pKeywordCount),
     		operators(pOperators),
@@ -26,8 +20,6 @@ namespace Scales
         currentLine = 1;
 
         allowEOF = true;
-
-        readNext();
     }
 
     Lexer::~Lexer()
@@ -36,6 +28,25 @@ namespace Scales
     }
 
     //public
+
+    void Lexer::setDataSource(std::istream *in)
+    {
+    	input = in;
+
+    	reset();
+
+    	readNext(); //Prefetch for pseudo-one-token lookahead
+    }
+
+    void Lexer::reset()
+    {
+    	currentIndex = 0;
+		currentLine = 1;
+
+		allowEOF = true;
+
+		readNext();
+    }
 
     Token Lexer::readToken()
     {
@@ -263,7 +274,12 @@ namespace Scales
 
     void Lexer::readNext()
 	{
-		lchar = input.get();
+    	if(input == null)
+    	{
+    		lexerError("No data source for lexer was given");
+    	}
+
+		lchar = input->get();
 
 		if(lchar == EOF && !allowEOF)
 		{

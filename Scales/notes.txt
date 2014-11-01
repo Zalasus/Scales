@@ -1,67 +1,4 @@
 
-
-namespace System;
-
-class Game
-
-	public static native func void forceAutosave();
-	
-	public static native func long getTickCount();
-	
-	public static native func float getSecondsPerTick();
-
-end
-
-
-class Timer
-
-	private long startTicks = 0;
-	private long stopTicks = 0;
-	private int running = 0;
-
-	public init()
-	
-	end
-	
-	public func void start()
-	
-		startTicks = Game:getTickCount();
-	
-		running = 1;
-	
-	end
-	
-	public func stop()
-	
-		stopTicks = Game:getTickCount();
-	
-		running = false;
-	
-	end
-	
-	public func long getTicksPassed()
-	
-		if(running)
-		
-			return Game:getTickCount() - startTicks;
-		
-		else
-		
-			return stopTicks - startTicks;
-		
-		end
-	
-	end
-	
-	public func float getSecondsPassed()
-	
-		return getTicksPassed() * Game:getSecondsPerTick();
-	
-	end
-	
-end
-
-
 block n:r:u
 n = nest id
 r = row id
@@ -170,6 +107,25 @@ bool isVarInScope(Scope currentScope, Scope varScope)
 
 }
 
+
+
+
+--------------------------------------
+
+
+Assignment:
+
+ (a = 4)
+ #This expression's value is a reference to a
+ 
+ Foo obj;
+ (obj = new Foo()).doStuff(); #This is a valid statement, and is short for:
+ 
+ Foo obj;
+ obj = new Foo();
+ obj.doStuff();
+
+ 
 
 
 

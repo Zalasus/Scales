@@ -2,11 +2,10 @@
  * ASMStream.cpp
  *
  *  Created on: 14.05.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
 #include "comp/ASMStream.h"
-
 
 namespace Scales
 {
@@ -101,9 +100,17 @@ namespace Scales
 	//---------------------------------------------
 
 
-	void ASMStream::write(uint8_t b)
+	void ASMStream::writeUByte(uint8_t b)
 	{
 		stream.write(b);
+	}
+
+
+
+	void ASMStream::writeUShort(uint16_t s)
+	{
+		stream.write(s & 0xFF);
+		stream.write((s & 0xFF00) >> 8);
 	}
 
 	void ASMStream::writeUInt(uint32_t i)
@@ -114,17 +121,25 @@ namespace Scales
 		stream.write((i & 0xFF000000) >> 24);
 	}
 
-	void ASMStream::writeUShort(uint16_t s)
+	void ASMStream::writeFloat(float f)
 	{
-		stream.write(s & 0xFF);
-		stream.write((s & 0xFF00) >> 8);
+		char data[sizeof(f)];
+		for(uint8_t i = 0; i < sizeof(f); i++)
+		{
+			stream.write(data[i]);
+		}
+	}
+
+	void ASMStream::writeDouble(double d)
+	{
+
 	}
 
 	void ASMStream::writeSString(const String &s)
 	{
 		writeUShort(s.length());
 
-		for(int32_t i = 0; i < s.length(); i++)
+		for(uint32_t i = 0; i < s.length(); i++)
 		{
 			stream.write(s[i]);
 
@@ -135,11 +150,11 @@ namespace Scales
 		}
 	}
 
-	void ASMStream::writeTString(const String &s)
+	void ASMStream::writeBString(const String &s)
 	{
-		write(s.length());
+		writeUByte(s.length());
 
-		for(int32_t i = 0; i < s.length(); i++)
+		for(uint32_t i = 0; i < s.length(); i++)
 		{
 			stream.write(s[i]);
 
@@ -150,11 +165,11 @@ namespace Scales
 		}
 	}
 
-	void ASMStream::writeString(const String &s)
+	void ASMStream::writeIString(const String &s)
 	{
 		writeUInt(s.length());
 
-		for(int32_t i = 0; i < s.length(); i++)
+		for(uint32_t i = 0; i < s.length(); i++)
 		{
 			stream.write(s[i]);
 		}
@@ -240,14 +255,14 @@ namespace Scales
 
 	ASMStream &ASMStream::operator<<(Opcode op)
 	{
-		write(op);
+		writeUByte(op);
 
 		return *this;
 	}
 
 	ASMStream &ASMStream::operator<<(const String &s)
 	{
-		writeString(s);
+		writeIString(s);
 
 		return *this;
 	}

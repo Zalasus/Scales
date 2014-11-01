@@ -2,17 +2,15 @@
  * ScalesFunction.cpp
  *
  *  Created on: 08.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
-
 #include "ScalesFunction.h"
-
 
 namespace Scales
 {
 
-	Function::Function(const String &pName, const TypeList &pParamTypes, const DataType &pReturnType, bool pNative)
+	FunctionSketch::FunctionSketch(const String &pName, const TypeList &pParamTypes, const DataType &pReturnType, bool pPrivate, bool pNative)
 		: name(pName),
 		  paramTypes(pParamTypes),
 		  returnType(pReturnType),
@@ -22,7 +20,7 @@ namespace Scales
 	{
 	}
 
-	Function::Function(const String &pName, const TypeList &pParamTypes, const DataType &pReturnType, bool pNative, uint32_t pAdress)
+	FunctionSketch::FunctionSketch(const String &pName, const TypeList &pParamTypes, const DataType &pReturnType, bool pPrivate, bool pNative, uint32_t pAdress)
 			: name(pName),
 			  paramTypes(pParamTypes),
 			  returnType(pReturnType),
@@ -32,7 +30,7 @@ namespace Scales
 	{
 	}
 
-	void Function::setAdress(uint32_t adr)
+	void FunctionSketch::setAdress(uint32_t adr)
 	{
 		adress = adr;
 		hasAdr = true;

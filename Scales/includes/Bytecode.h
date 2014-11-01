@@ -2,7 +2,7 @@
  * Bytecode.h
  *
  *  Created on: 04.06.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
 #ifndef BYTECODE_H_
@@ -15,10 +15,7 @@ namespace Scales
 	{
 		OP_NOP = 0,
 
-		OP_DECLAREVAR = 1,
 		OP_NEW = 4,
-		OP_DECLAREFUNC = 6,
-		OP_REGISTEREVENT = 7,
 		OP_PUSHVAR = 10,
 		OP_POPVAR = 12,
 
@@ -38,7 +35,7 @@ namespace Scales
 		OP_LOGICAND = 25,
 
 		OP_GETMEMBER = 28,
-		OP_COPY = 30,
+		OP_CLONE = 30,
 
 		OP_JUMP = 35,
 		OP_JUMPFALSE = 37,

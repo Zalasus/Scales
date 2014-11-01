@@ -2,11 +2,10 @@
  * ScalesUtil.cpp
  *
  *  Created on: 08.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
 
 #include "ScalesUtil.h"
-
 
 namespace Scales
 {
@@ -18,9 +17,9 @@ namespace Scales
 			return false;
 		}
 
-		for(int32_t i = 0; i < begin.length(); i++)
+		for(uint32_t i = 0; i < begin.length(); i++)
 		{
-			if(s[i] != begin(i))
+			if(s[i] != begin[i])
 			{
 				return false;
 			}
@@ -36,7 +35,7 @@ namespace Scales
 			return false;
 		}
 
-		for(int32_t i = 0; i < end.length(); i++)
+		for(uint32_t i = 0; i < end.length(); i++)
 		{
 			if(s[i + (s.length() - end.length())] != end[i])
 			{
@@ -54,7 +53,7 @@ namespace Scales
 
 	int32_t StringUtils::indexOf(const String &s, char find, int32_t startIndex)
 	{
-		for(int32_t i = startIndex; i<s.length(); i++)
+		for(uint32_t i = startIndex; i<s.length(); i++)
 		{
 			if(s[i] == find)
 			{
@@ -77,11 +76,11 @@ namespace Scales
 			return -1;
 		}
 
-		for(int32_t i = startIndex ; i < (s.length() - find.length()); i++)
+		for(uint32_t i = startIndex ; i < (s.length() - find.length()); i++)
 		{
 			bool found = true;
 
-			for(int32_t j = 0 ; j < s.length(); j++)
+			for(uint32_t j = 0 ; j < s.length(); j++)
 			{
 				if(s[i + j] != find[j])
 				{
@@ -97,6 +96,25 @@ namespace Scales
 		}
 
 		return -1;
+	}
+
+	template <typename T>
+	String StringUtils::append(const String &s, T i)
+	{
+		std::ostringstream out;
+
+		out << s << i;
+		return out.str();
+	}
+
+	String operator+(const String &s, uint32_t i)
+	{
+		return StringUtils::append(s, i);
+	}
+
+	String operator+(const String &s, int32_t i)
+	{
+		return StringUtils::append(s, i);
 	}
 
 }

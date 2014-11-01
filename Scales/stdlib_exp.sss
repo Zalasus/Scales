@@ -1,0 +1,46 @@
+
+namespace util;
+
+
+class HashMap<K,V>
+
+	private V[] data;
+	private K[] keys;
+	
+	public init(int size)
+	
+		realloc(size);
+	
+	end
+	
+	public init()
+	
+		init(8);
+		
+	end
+	
+	public func void realloc(int minSize)
+	
+		if(sizeof(data) < minSize)
+		
+			V[] newData = new V[minSize];
+			K[] newKeys = new K[minSize];
+			
+			int i = 0;
+			while(i < minSize)
+			
+				newData[i] = data[i];
+				newKeys[i] = keys[i];
+			
+			end
+			
+			data = newData;
+			keys = newKeys;
+		
+		end
+	
+	end
+	
+	
+
+end

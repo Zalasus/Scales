@@ -2,13 +2,20 @@
  * ScalesUtil.h
  *
  *  Created on: 06.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
+
+namespace Scales
+{
+	class StringUtils;
+}
 
 #ifndef SCALESUTIL_H_
 #define SCALESUTIL_H_
 
 #include <string>
+#include <sstream>
+#include <vector>
 
 #define null 0
 
@@ -33,7 +40,14 @@ namespace Scales
 		{
 			return s.substr(startIndex, endIndex - startIndex);
 		}
+
+		template <typename T>
+		static String append(const String &s, T i);
 	};
+
+	String operator+(const String &s, uint32_t i);
+	String operator+(const String &s, int32_t i);
+
 };
 
 

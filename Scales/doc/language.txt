@@ -2,7 +2,7 @@
 +=======================+
 |  The Scales language  |
 |     specification     |
-|        V. 1.1         |
+|        V. 1.0         |
 |   (C)  Zalasus 2014   |
 +=======================+
 
@@ -11,264 +11,250 @@
 Contents
 ========
 
-    1 - Changelog
-    2 - Foreword
-   	Design paradigms
-    Programming paradigms
-	Type system
-	Data types
-	Scripts
-	847
-	ToDo
 
 
 1 - Changelog
 =============
 
-29.03.2014  1.0     First specification
-04.05.2014	1.1		Revisited OOP-features
 
 
-
-2 - Foreword
+2 - Overview
 ============
 
-    This is the specification of the Scales scripting language. This document
-    covers all features of the language itself. Features of the compiler/
-    bytecode interpreter/ utility library are covered in their own documents,
-    respectively.
+This is the specification of the Scales scripting language. This document
+covers all features of the language itself. Features of the compiler/
+bytecode interpreter/ utility library are covered in their own documents,
+respectively.
 
-    Scales is the official scripting language for the NRPG3 game engine. It is
-    also designed to be easily integrated into other applications.
+Scales is the official scripting language for the NRPG3 game engine. It is
+also designed to be easily integrated into other applications.
 
-	Scales evolved from the late developement versions of KniftoScript 2, which
-	relied on the reflection features of its Java-based VM. As the developement
-	of NRPG3 switched from Java to C++, a new OOP model without the need for
-	native reflection had to be defined.
+Scales evolved from the late developement versions of KniftoScript 2, which
+relied on the reflection features of its Java-based VM. As the developement
+of NRPG3 switched from Java to C++, a new OOP model without the need for
+native reflection had to be defined.
 
 
 
 Design paradigms
 ================
 
-    Scales was designed to do basic tasks on script-layer as also to be able to
-    delegate them to the underlaying implementation.
-    
-    The interfaces between script and implementation are defined in the same
-    language and source unit as the script itself.
+Scales was designed to do basic tasks on script-layer as also to be able to
+delegate them to the underlaying implementation.
 
-    As performance is one of the most important features of the Scales language
-    it is designed to be compiled during runtime rather than to be interpreted.
-	Therefore, the implementation should provide factory methods which can 
-	easily convert a script source file into an executeable script.
+The interfaces between script and implementation are defined in the same
+language and source unit as the script itself and are therefore easily
+to understand by just looking at the implementing file.
 
-	Another developement target of the Scales implementation is to keep it
-	small. The goal is to keep the compiled versions of both the script vm and
-	the script compiler UNDER 847kB (including everything that is needed to run
-	them).
-	 
+As performance is one of the most important features of the Scales language
+it is designed to be compiled during runtime rather than to be interpreted.
+Therefore, the implementation should provide factory methods which can 
+easily convert a script source file into an executeable script.
+
+Another developement target of the Scales implementation is to keep it
+small. The goal is to keep the compiled versions of both the script vm and
+the script compiler UNDER 847kB (including everything that is needed to run
+them).
+
 
 
 Programming paradigms
 =====================
 
-    -Imperative
-    -Structured
-    -Object-oriented
+Scales is an imperative, structured and object-oriented language. It's
+syntax bears resemblance with LUA(blocks) and Java(expressions and
+declarations).
+
+Scales' object-orientation is based on classes, which are the main unit of
+programming in Scales. Every excecuteable code is part of classes.
+
+Scales' type system is weak, static and explicit. Variables have to
+be declared before they can be used. Variables have a fixed data type that
+has be know at compile-time. Implicit conversions are possible, although
+some data types require explicit conversion.
 
 
 
-Type system
+Compilation
 ===========
 
-    -Weak
-    -Static
-    -Explicit
+The copiler does not rely on the existence of an actual filesystem in
+it's compiling environment. Therefore, there are no constructs to
+include other files in one compilation unit. All required resources
+for compiling a Scales program have to be in one file/stream etc. or have
+to be loaded from libraries during compile time (the specific process is
+not part of this specification but rather the one of the compiler).
+
+Regardless of their storage, source units consist of class- and namespace 
+declarations. Compiling a source unit yields a collection of compiled 
+classes.
 
 
 
-Data types
-==========
+Language features
+=================
 
-    Scales knows the following data types:
-
-        int     -   32 bit signed integer
-        long    -   64 bit signed integer
-        float   -   32 bit IEEE 754 float representation with unified NaN
-        double  -   64 bit IEEE 754 float representation with unified NaN
-        string  -   byte array with a max. length of 2^32 - 1
-        object  -   container for scripted objects
-        
-        
-        
-Source units
-============
-
-	Script sources do not rely on the existence of an actual filesystem in
-	their compiling environment. Therefore, there are no constructs to
-	include other files in one compilation unit. All required resources
-	for compiling a Scales program have to be in one file/stream etc. or have
-	to be loaded from libraries during compile time (the specific process is
-	not part of this specification but rather the one of the compiler).
-	
-	Regardless of their storage, source units consist of the following 
-	structures: [...]
-	
-        
-        
 Comments
-========
+--------
 
-	In order to allow documentation inside the source code, annotations can be
-	added to source files in the form of comments. All text inside a comment is
-	ignored by the compiler.
+In order to allow documentation inside the source code, annotations can be
+added to source files in the form of comments. All text inside a comment is
+ignored by the compiler.
+
+Scales knows two forms of comments: single-line and multi-line comments.
+
+Single-line comments reach from their declaration to the end of the line 
+they are opened on. They are declared using the hash character #.
+Example:
+
+    # This is a comment and is not beeing compiled
 	
-	Scales knows two forms of comments: single-line and multi-line comments.
-	
-	Single-line comments reach from their declaration to the end of the line 
-	they are declared on. They are declared using the hash character #.
-	Example comment:
-	
-		# This is a comment and is not beeing compiled
-		
-	Multi-line comments reach from their declarion to the point they are 
-	explicitly closed. They are started using a hash character followed by an
-	asterisk (#*) and are closed by the same token in reverse (*#).
-	Example comment:
-	
-		#* This comment may be longer than one line.
-		
-		This line is still part of the comment. *#
-		
-		
-	Multiline comments are commonly used for automatic documentation tools that
-	generate source documentions from specially formatted comments.
-	The Scales language specifies no special markup for documentation comments,
-	but as those comments need to be specially marked as such, the popular
-	Javadoc- and Doxygen-style with a double asterisk comment opener (#**) is
-	is also the recommended documentation style for Scales programs (Official 
-	doc syntax may be part of future versions of the Scales language).
-	
-	
+Multi-line comments reach from their declarion to the point they are 
+explicitly closed. They are started using a hash character followed by an
+asterisk (#*) and are closed by the same token in reverse (*#).
+Example:
+
+    #* This comment may be longer than one line.
     
+    This line is still part of the comment. *#
+	
+Note that these comments are not nestable:
+
+    #* This is part of the comment 
+    #* This is, too *#
+    This isn't anymore *#
+	
+	
+Multiline comments are commonly used for automatic documentation tools that
+generate source documentions from specially formatted comments.
+The Scales language specifies no special markup for documentation comments,
+but as those comments need to be specially marked as such, the popular
+Javadoc- and Doxygen-style with a double asterisk comment opener (#**) is
+is also the recommended documentation style for Scales programs (Official 
+doc syntax may be part of future versions of the Scales language).
+
+
+
+Classes
+-------
+
+Classes are the main functional unit of any Scales application. They
+consist of variables and functions, and may resemble any type of scriptable
+unit. For example, in a game context, a class could reflect a type of
+weapon, a character etc. The process of connecting a Scales class to
+whatever target that is part of the implementation is called "linking".
+(Note that this has nothing to do with the linkage process of a common
+high-level language compilation toolchain like in C/C++)
+
+The basic syntax for defining a class is as follows:
+
+class <classname> [links <link name>] [extends <classname>]
+
+    [<statement>]*
+
+end
+
+
+
 Keywords and Identifiers
-========================
+------------------------
 
-	The Scales language defines the following keywords:
-	(Note: This is a preliminary list and is therefore not yet ordered)
-	
-		namespace	default
-		end			public
-		private		universal
-		func		event
-		native		void
-		script		static
-		links		extends
-		uses		return
-		while		if
-		elseif		else
-		break		null
-		this		parent
-		goto		new
-		init		int
-		long		float
-		double		string
-		object
-	
-	
-	Names for scripts/variables/functions etc. must not be one of the above.
-	Additionally, names must meet the following requirements in order to be
-	used as identifiers:
-	
-	They must start with one of the following characters:
-	
-		abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW_
-		
-	The may continue with zero or more of one of the above characters or a
-	number.
-	
-	
-	    
-Scripts
-=======
+The Scales language defines the following keywords:
+(Note: This is a preliminary list and is therefore not yet ordered)
 
-	Excecutable code exists in the form of "scripts", which can be compared to
-	classes of other languages. A basic script is defined as follows:
-	
-		'script' <scriptname>
-		
-			<script block>
-			
-		'end'
-	
-	where <scriptname> is a valid identifier (see chapter 
-	"Keywords and Identifiers").
-	
-	The 
-	
-	A script reflects the hidden data structure of
-	the implementation through language features such as functions, events and
-	variables. Those may be externalized, meaning the script only provides
-	their declaration(how the element looks), while the functionality is
-	delegated to the implementation. Those elements are called "native".
-	
-	Native functions and variables can only exist in a script that defines
-	to which unit(class) of the implementation the actions should be delegated.
-	This definition is called a "link".
-	
-	Script instantiation
-	--------------------
-	Scripts may be "instantiated", so their variables and functions can be
-	accessed through variables of the special "object" type.
-	Multiple instances of a single script can exist simultaneously. In this
-	way, scripts act the same as classes in other object-orientated languages.
-	
-	Scripts with links can be used as instances through object variables, too,
-	but this requires the implementation to provide native methods to create
-	them, as every instance of a linked script requires an instance of the
-	linked reflection unit(class). Therefore, every linked script that needs to
-	be instatiated at runtime needs to supply at least one native constructor
-	which may be called directly using the new-instruction or indirectly
-	through a non-native constructor.
-	
-	
-	
+	namespace
+	default
+	class
+	links
+	extends
+	use
+	public
+	private
+	static
+	native
+	func
+	init
+	void
+	if
+	elseif
+	else
+	end
+	do
+	while
+	break
+	continue
+	return
+	new
+	this
+	null
+	parent
+	int
+	long
+	float
+	double
+	string
+	object
+
+
+Names for classes/variables/functions etc. must not be one of the above.
+Additionally, names must meet the following requirements in order to be
+used as identifiers:
+
+They must start with one of the following characters:
+
+    abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW_
+
+The may continue with zero or more of one of the above characters or a
+number.
+
+
 Namespaces
-==========
+----------
 
-	Scripts are stored in namespaces which can be used to group scripts with
-	similar functionality and in order to reduce the likelyhood of naming
-	conflicts.
+	Classes are organized in namespaces in order to reduce the likelyhood of 
+	naming conflicts.
 	
-	A namespace declaration affects every script defined after
+	A namespace declaration affects every class defined after
 	the namespace statement until a new namespace statement is found.
 	
 	Namespaces are identified by the 'namespace'-keyword in the main block of
 	the source unit, followed by the desired name of the namespace (must be a
 	valid identifier) and terminated with a semicolon ';'.
 	In place of the namespace identifier, the 'default' keyword may be used in
-	order to define the following scripts in the same namespace as they would
+	order to define the following classes in the same namespace as they would
 	be defined without any namespace given (name of the namespace is an empty
 	string by default).
 	
 	Examples:
 	
-		namespace util; # All following scripts are defined as util:<scriptname>
+		namespace util; # All following classes are defined as util:<classname>
 		
-		namespace default; # All following scripts are defined as <scriptname>
+		namespace default; # All following classes are defined as <classname>
 		
 		
-	Whenever a script is used, that is not within the same namespace as the
-	script using it, it has to be adressed through the namespace by using the
-	scope operator ':', except if the script to be referenced is in the default
+	Whenever a class is used that is not within the same namespace as the
+	class using it, it has to be adressed through the namespace by using the
+	scope operator ':', except if the class to be referenced is in the default
 	namespace. The namespace specifier can also be ommitted if the target
-	script is adressed in the "using" list of the referencing script (see
-	chapter "Script header").
+	script is adressed with a 'using'-statement within the class where the
+	reference is made.
 	
-	Example:
+	Example for namespace adressing:
 	
 		public util:Map hashMap = new util:HashMap();
 		
+		using util:Integer;
+		public Integer i = new Integer();
+		
+		
+	Note that namespaces in Scales are not hierarchically organized like
+	packages in Java. A namespace is only a prefix of the classname.
+	Constructs like Scales:Util:Math are not valid.
+	
+	In early developement versions of Scales, varaibles could be declared in
+	namespace-scope(called universals). This feature, however, was removed as
+	variables outside of objects were restricted to native statics.
+				
 847
 ===
 

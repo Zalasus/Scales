@@ -2,14 +2,23 @@
  * ScalesVariable.h
  *
  *  Created on: 08.07.2014
- *      Author: Niklas Weissner
+ *      Author: Zalasus
  */
+
+namespace Scales
+{
+	class Scope;
+	class VariableSketch;
+	class Variable;
+}
 
 #ifndef SCALESVARIABLE_H_
 #define SCALESVARIABLE_H_
 
 #include "ScalesUtil.h"
 #include "ScalesType.h"
+#include "ScalesSystem.h"
+#include "ScalesValue.h"
 
 namespace Scales
 {
@@ -35,10 +44,10 @@ namespace Scales
 		uint32_t uniqueId;
 	};
 
-	class VariablePrototype
+	class VariableSketch
 	{
 	public:
-		VariablePrototype(const String &name, const DataType &type, bool priv, const Scope &pScope);
+		VariableSketch(const String &name, const DataType &type, bool priv, const Scope &pScope);
 
 		String getName() const;
 		DataType getType() const;
@@ -53,17 +62,27 @@ namespace Scales
 		Scope scope;
 	};
 
-
+	/**
+	 * Just a wrapper. Deallocation is up to the classes user or the GC. Class is copyable, the pointed data is NOT copied.
+	 */
 	class Variable
 	{
 	public:
-		Variable(VariablePrototype *proto);
+		Variable(const VariableSketch &proto, ScalesSystem *system);
+		Variable(const Variable &v); //Better override it. I don't trust the compiler
 
-		const VariablePrototype *getPrototype() const;
+		VariableSketch getSketch() const;
+
+		ValuePtr *getValuePtr() const;
+
+		void leavesScope();
+		void assignByReference(ValuePtr *v);
 
 	private:
 
-		VariablePrototype *prototype;
+		VariableSketch sketch;
+
+		ValuePtr *value;
 	};
 
 }
