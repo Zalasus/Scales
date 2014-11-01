@@ -1,7 +1,7 @@
 /*
  * ScalesException.cpp
  *
- *  Created on: 28.04.2014
+ *  Created on: 01.11.2014
  *      Author: Zalasus
  */
 
@@ -10,19 +10,33 @@
 namespace Scales
 {
 
-	ScalesException::ScalesException(ExceptionType t, String msg) : type(t), message(msg)
-	{
+#ifdef _DEBUG
 
+	Exception::Exception(exceptionType_t pType, const String &pMsg, const String &file, uint32_t line)
+	: type(pType),
+	  msg(pMsg)
+	{
+		msg += " (" + file + " @ line " + line + ")";
 	}
 
-	String ScalesException::getMessage()
+#else
+
+	Exception::Exception(exceptionType_t pType, const String &pMsg)
+	: type(pType),
+	  msg(pMsg)
 	{
-		return message;
 	}
 
-	ScalesException::ExceptionType ScalesException::getType()
+#endif
+
+	Exception::exceptionType_t Exception::getType() const
 	{
 		return type;
+	}
+
+	String Exception::getMessage() const
+	{
+		return msg;
 	}
 
 }

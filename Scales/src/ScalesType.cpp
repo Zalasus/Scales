@@ -1,7 +1,7 @@
 /*
  * ScalesType.cpp
  *
- *  Created on: 22.07.2014
+ *  Created on: 31.10.2014
  *      Author: Zalasus
  */
 
@@ -10,14 +10,73 @@
 namespace Scales
 {
 
-	bool DataType::operator==(const DataType &t) const
+	ClassID::ClassID(const String &pNspace, const String &pClassname)
+	: nspace(pNspace),
+	  classname(pClassname)
 	{
-		return base == t.getTypeBase() && classId == t.getClassId();
 	}
 
-	bool DataType::operator==(const DataTypeBase tb) const
+	String ClassID::getNamespace() const
 	{
-		return base == tb;
+		return nspace;
+	}
+
+	String ClassID::getClassname() const
+	{
+		return classname;
+	}
+
+	bool ClassID::operator==(const ClassID &right)
+	{
+		return (getNamespace() == right.getNamespace()) && (getClassname() == right.getClassname());
+	}
+
+	String ClassID::toString() const
+	{
+		if(nspace.empty())
+		{
+			return classname;
+
+		}else
+		{
+			return nspace + ":" + classname;
+		}
+	}
+
+	const ClassID ClassID::EMPTY = ClassID("","");
+
+
+
+
+	DataType::DataType(DataType::dataTypeBase_t pBase)
+	 : DataType(pBase, ClassID::EMPTY)
+	{
+	}
+
+	DataType::DataType(DataType::dataTypeBase_t pBase, const ClassID &pClassID)
+	 : base(pBase),
+	   classID(pClassID)
+	{
+	}
+
+	DataType::dataTypeBase_t DataType::getBase() const
+	{
+		return base;
+	}
+
+	ClassID DataType::getClassID() const
+	{
+		return classID;
+	}
+
+	bool DataType::isNumeric() const
+	{
+		return base < DTB_STRING;
+	}
+
+	bool DataType::isArray() const
+	{
+		return false;
 	}
 
 	String DataType::toString() const
@@ -25,38 +84,53 @@ namespace Scales
 		switch(base)
 		{
 		case DTB_INT:
-			return "int";
+			return String("int");
 
 		case DTB_LONG:
-			return "long";
+			return String("long");
 
 		case DTB_FLOAT:
-			return "float";
+			return String("float");
 
 		case DTB_DOUBLE:
-			return "double";
+			return String("double");
+
+		case DTB_STRING:
+			return String("string");
 
 		case DTB_OBJECT:
-			return classId.toString();
+			return classID.toString();
 
 		case DTB_ABSTRACT_OBJECT:
-			return "object";
+			return String("object");
+
+		case DTB_VOID:
+			return String("void");
 
 		default:
-			return "unknown";
+			return String("I've got more rubber ducks than you");
 		}
 	}
 
-	bool DataType::isNumeric() const
+	bool DataType::operator==(const DataType &t) const
 	{
-		return !(base & 0x03);
+		if(t.getBase() != getBase())
+		{
+			return false;
+		}
+
+		if(getBase() == DTB_OBJECT)
+		{
+			return t.getClassID() == getClassID();
+		}
+
+		return true;
 	}
 
-	bool DataType::isArray() const
+	bool DataType::operator==(const dataTypeBase_t tb) const
 	{
-		return false; //No arrays allowed yet TODO: implement arrays here
+		return tb == getBase();
 	}
-
 
 	bool DataType::canCastImplicitly(const DataType &from, const DataType &to)
 	{
@@ -64,10 +138,10 @@ namespace Scales
 		{
 			//An implicit cast(a to b) is allowed if all type bits that are set in a are also set in b
 			// -> Mask out all bits of b that are zero in a and look if the result is equal a
-			return (from.getTypeBase() & to.getTypeBase()) == from.getTypeBase();
+			return (from.getBase() & to.getBase()) == from.getBase();
 		}
 
-		if(from.getTypeBase() == DTB_OBJECT && to.getTypeBase() == DTB_ABSTRACT_OBJECT)
+		if(from.getBase() == DTB_OBJECT && to.getBase() == DTB_ABSTRACT_OBJECT)
 		{
 			return true; //All object types may be implicitly cast to abstract object
 		}
@@ -99,12 +173,42 @@ namespace Scales
 	{
 		if(left.isNumeric() && right.isNumeric())
 		{
-			return DataType((DataType::DataTypeBase)(left.getTypeBase() | right.getTypeBase())); //See above note
+			return DataType(static_cast<DataType::dataTypeBase_t>(left.getBase() | right.getBase())); //See above note
 		}
 
-		return DataType(DTB_NOTYPE);
+		return DataType(DTB_VOID);
+	}
+
+	DataType::dataTypeBase_t DataType::byName(const String &name)
+	{
+		if(name == "int")
+		{
+			return DTB_INT;
+
+		}else if(name == "long")
+		{
+			return DTB_LONG;
+
+		}else if(name == "float")
+		{
+			return DTB_FLOAT;
+
+		}else if(name == "double")
+		{
+			return DTB_DOUBLE;
+
+		}else if(name == "string")
+		{
+			return DTB_STRING;
+
+		}else if(name == "object")
+		{
+			return DTB_ABSTRACT_OBJECT;
+
+		}else
+		{
+			return DTB_VOID;
+		}
 	}
 
 }
-
-

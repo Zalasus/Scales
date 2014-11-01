@@ -1,72 +1,79 @@
 /*
  * ScalesTest.cpp
  *
- *  Created on: 30.03.2014
+ *  Created on: 08.10.2014
  *      Author: Zalasus
  */
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <vector>
 
-#include <time.h>
-
-#include "ScalesSystem.h"
-
-#include "comp/Lexer.h"
-#include "comp/Compiler.h"
+#include "ScalesClass.h"
+#include "ScalesRoot.h"
+#include "ScalesType.h"
+#include "ScalesUtil.h"
+#include "ScalesString.h"
+#include "ScalesReflection.h"
 #include "ScalesException.h"
 
-void doStuff()
+class Scales_Native_Console : public Scales::Reflectable
 {
-	Scales::ScalesSystem ss;
+public:
 
-	std::istream in;
+	static void println(const Scales::String &s);
 
-	Scales::Compiler compiler;
-	Scales::Library l = compiler.compile(&in, &ss);
+	static Scales::String NEW_LINE;
 
-	ss.loadLibrary(l);
+};
 
+SCALES_REGISTER_REFLECTABLE_BEGIN(Scales_Native_Console, nrpg_ni_console)
 
+	SCALES_REGISTER_FUNCTION_1P_STATIC(println, Scales::DataType::DTB_VOID, Scales::DataType:DTB_STRING)
 
-}
+	SCALES_REGISTER_FIELD_STATIC(newLine, Scales::DataType::DTB_STRING)
+
+SCALES_REGISTER_REFLECTABLE_END(Scales_Native_Console, nrpg_ni_console)
+
 
 int main()
 {
+	Scales::Root root;
 
-	std::cout << "Compiling starts now" << std::endl;
-
-	clock_t t = clock();
-
-	std::ifstream in("oos3.sss", std::ios::in);
-
-	if(in.is_open())
+	//---Example of how to create classes from a script file
+	Scales::Compiler *comp = root.getCompiler(Scales::CF_GENERIC);
+	if(comp != nullptr)
 	{
-		Scales::ScalesSystem ss;
+		//There is a compiler we can use
 
-		Scales::Compiler c;
-
+		std::ifstream in("oos3.sss");
 		try
 		{
-			c.compile(&in, &ss);
+			comp->compile(&in);
 
-		}catch(Scales::ScalesException &e)
+			const std::vector<const Scales::Class*> classList = comp->listGeneratedClasses();
+
+			std::cout << std::endl << "Compiler generated " << classList.size() << " classes: " << std::endl;
+			for(auto iter = classList.begin(); iter != classList.end(); iter++)
+			{
+				const Scales::Class *cl = *iter;
+
+				std::cout << cl->getID().toString() << "\t" << cl->getFieldCount() << "F\t" << cl->getJoinedFieldCount() << "JF\t" << cl->getProgramSize() << "P" << std::endl;
+			}
+
+		}catch(Scales::Exception &e)
 		{
 			std::cerr << e.getMessage() << std::endl;
-		}
 
+			return -1;
+		}
 	}
 
-	in.close();
-
-	t = clock() - t;
-
-	std::cout << "Finished. That took me about " << t << " ticks, which is roughly " << ((float)t)/CLOCKS_PER_SEC << " seconds" << std::endl;
-
-	/*ScriptSystem ss = ScriptSystem();
-
-	ss.declareLink("Console", thingThatExtendsScriptable);
-
-	*/
-
+	return 0;
 }
+
+
+
+
+
+
