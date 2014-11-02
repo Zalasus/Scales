@@ -52,6 +52,10 @@ namespace Scales
 		return nativeTarget;
 	}
 
+	const Class *Class::getSuperclass() const
+	{
+		return super;
+	}
 
 	Function *Class::createFunction(const String &functionName, const TypeList &paramTypes)
 	{
@@ -65,6 +69,35 @@ namespace Scales
 		functions.push_back(f);
 
 		return f;
+	}
+
+	const std::vector<const Function*> Class::listFunctions() const
+	{
+		//TODO: Check if there is better way of making the vector elements const than shoving them into another vector
+		std::vector<const Function*> newList;
+
+		for(auto iter = functions.begin(); iter != functions.end(); iter++)
+		{
+			newList.push_back(*iter);
+		}
+
+		return newList;
+	}
+
+	const std::vector<const Function*> Class::listFunctionsByName(const String &pName) const
+	{
+		//TODO: Check if there is better way of making the vector elements const than shoving them into another vector
+		std::vector<const Function*> newList;
+
+		for(auto iter = functions.begin(); iter != functions.end(); iter++)
+		{
+			if((*iter)->getName() == pName)
+			{
+				newList.push_back(*iter);
+			}
+		}
+
+		return newList;
 	}
 
 	void Class::removeFunction(const Function *func)

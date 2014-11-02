@@ -278,6 +278,11 @@ namespace Scales
 
     			usingStatement();
 
+    		}else if(t.isType(Token::TT_EOF))
+    		{
+
+    			error("Unexpected end of stream in class block", t.getLine());
+
     		}else
     		{
     			error("Unexpected token in class block: " + t.getLexem(), t.getLine());
@@ -293,6 +298,18 @@ namespace Scales
     	if(asmout.hasUndefinedMarkers())
 		{
 			error("Fatal error: DefaultCompiler generated invalid bytecode. Markers were requested but not defined. This is most likely a compiler bug.", 0);
+		}
+
+    	//we need to check if class is complete (all functions have adresses)
+    	const std::vector<const Function*> funcs = currentClass->listFunctions();
+    	for(auto iter = funcs.begin(); iter != funcs.end(); iter++)
+		{
+    		const Function *f = (*iter);
+
+			if(!f->hasAdress() && !f->isNative())
+			{
+				error("Non-native function '" + Function::getInfoString(f->getName(), f->getParamTypes()) + "' of current class was declared but never defined", t.getLine());
+			}
 		}
 
     	currentClass->copyProgramArray(asmout.getBuffer(), asmout.getSize());// give the class it's bytecode
@@ -358,7 +375,7 @@ namespace Scales
 				{
 					if(currentFunction->getReturnType() == DataType::DTB_VOID)
 					{
-						error("Can not return a value in a void function/event. Expected semicolon after 'return' keyword", t.getLine());
+						error("Can not return a value in a void function. Expected semicolon after 'return' keyword", t.getLine());
 					}
 
 					ExpressionInfo info = expression(true, scope);
@@ -471,7 +488,7 @@ namespace Scales
 
 			}else if(t.getType() == Token::TT_EOF)
 			{
-				error("Unexpected end of file in function block", t.getLine());
+				error("Unexpected end of stream in function block", t.getLine());
 
 			}else
 			{
@@ -752,7 +769,7 @@ namespace Scales
 			error("Expected closing parentheses after parameter list, but found: " + t.getLexem(), t.getLine());
 		}
 
-		//let's check if there's already a function like this one first
+		//first, check if there's already a function like this one in this very class
 		const Function *oldFunc = currentClass->getFunction(ident.getLexem(), paramTypes);
 		if(oldFunc != nullptr)
 		{
@@ -766,6 +783,27 @@ namespace Scales
 			{
 				// The old function is only a prototype. since we can't modify it from here, we remove the prototype from the class and recreate it later
 				currentClass->removeFunction(oldFunc);
+			}
+
+		}else if(currentClass->getSuperclass() != nullptr) //if there's no similar function, and the class has a superclass, check if a function is inherited from a superclass
+		{
+			const Function *oldSuperFunc = currentClass->getSuperclass()->getJoinedFunction(ident.getLexem(), paramTypes);
+
+			if(oldSuperFunc != nullptr)
+			{
+				//there is a similar function, but we don't mind. it may be overridden, as long as return type, access type etc. are the same
+
+				if(oldSuperFunc->isNative()) //natives, however, must never be overridden
+				{
+					error("Native function " + Function::getInfoString(ident.getLexem(), paramTypes) + " in superclass must not be overridden", ident.getLine());
+
+				}else if(!(oldSuperFunc->getReturnType() == returnType) || (oldSuperFunc->isPublic() != !(funcFlags & VF_PRIVATE)))
+				{
+					error("Overriding function " + Function::getInfoString(ident.getLexem(), paramTypes) + " must not change return or access type", ident.getLine());
+				}
+
+				//nope, everything in order. we may override the function
+
 			}
 		}
 
@@ -834,10 +872,15 @@ namespace Scales
 				paraName = StringUtils::substring(paraName, 1, paraName.length());
 			}
 
-			//Declare locals prototypes
+			//Declare local
 			locals.push_back(Local(paraName, paramTypes[i], scopeOfFuncBlock));
 
-			//Get the locals from stack
+			writeASM("DECLARELOCAL '" + paraName + "'," + (uint32_t)paramTypes[i].getBase());
+			asmout << OP_DECLARELOCAL;
+			asmout.writeBString(paraName);
+			writeDatatypeToBytecode(paramTypes[i]);
+
+			//Get the local from stack
 			if(byVal)
 			{
 				writeASM("DEREFER");
@@ -919,14 +962,15 @@ namespace Scales
 				error("Function '" + Function::getInfoString(funcName, paramTypes) + "' was not defined in given object type class '" + baseType.toString() + "'", t.getLine());
 			}
 			
-			if(!(membFunction->hasAdress()))
-			{
-				error("Function '" + Function::getInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' was declared but never defined", t.getLine());
-			}
-
 			if(!membFunction->isPublic())
 			{
 				error("Function '" + Function::getInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' is private", t.getLine());
+			}
+
+			if(!membFunction->hasAdress() && !membFunction->isNative())
+			{
+				//since we are checking for this once a class is finished, this should be very unlikely to occur. we still check for it since imported bytecode may contain undefined functions
+				error("Non-native function '" + Function::getInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' was declared but never defined", t.getLine());
 			}
 
 			writeASM("CALLMEMBER '" + funcName + "'," + paramCount);
@@ -943,11 +987,6 @@ namespace Scales
 			if(ownFunction == nullptr)
 			{
 				error("Function '" + Function::getInfoString(funcName, paramTypes) + "' was not defined in current class", t.getLine());
-			}
-
-			if(!ownFunction->hasAdress())
-			{
-				error("Function '" + Function::getInfoString(funcName, paramTypes) + "' in current class was declared but never defined", t.getLine());
 			}
 
 			//No need to check for private, as we are calling from the same class
@@ -1728,28 +1767,23 @@ namespace Scales
 			}
 			
 			const Function *constr = instClass->getFunction("init", paramTypes);
-			
 			if(constr == nullptr)
 			{
-				if(!paramTypes.empty()) //only give an error when the undefined constructor is not the default constructor
-				{
-					error("Constructor " + Function::getInfoString(classtype.toString(), paramTypes) + " was not declared", t2.getLine());
-				}
-
-				//the impicit default constructor is public, so there's no need to check that
+				//there are no implicit constructors. if a class has no defined constructors, it can not be instantiated.
+				error("Constructor " + Function::getInfoString(instClass->getID().toString(), paramTypes) + " was not declared", t2.getLine());
 				
 			}else
 			{
 				if(!constr->isPublic())
 				{
-					error("Constructor " + Function::getInfoString(classtype.toString(), paramTypes) + " is private", t2.getLine());
+					error("Constructor " + Function::getInfoString(instClass->getID().toString(), paramTypes) + " is private", t2.getLine());
 				}
 			}
 			
-			writeASM("NEW '" + classtype.getNamespace() + "','" + classtype.getClassname() + "'," + paramCount);
+			writeASM("NEW '" + instClass->getID().getNamespace() + "','" + instClass->getID().getClassname() + "'," + paramCount);
 			asmout << OP_NEW;
-			asmout.writeBString(classtype.getNamespace());
-			asmout.writeBString(classtype.getClassname());
+			asmout.writeBString(instClass->getID().getNamespace());
+			asmout.writeBString(instClass->getID().getClassname());
 			asmout.writeUByte(paramCount);
 
 			return ExpressionInfo(DataType(DataType::DTB_OBJECT, instClass->getID()), false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are actually void functions, but the new statement returns the instance, so it is considered as a non-void function call
@@ -1795,11 +1829,15 @@ namespace Scales
         	asmout << OP_PUSH_INT;
         	asmout.writeInt(1);
 
+        	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
+
         }else if(t.is(Token::TT_KEYWORD,"false"))
         {
         	writeASM("PUSHINT 0");
         	asmout << OP_PUSH_INT;
         	asmout.writeInt(0);
+
+        	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
 
         }else if(t.getType() == Token::TT_EOF)
         {

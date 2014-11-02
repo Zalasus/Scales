@@ -98,7 +98,7 @@ namespace Scales
 
     	if(lchar == EOF)
     	{
-    		return Token(Token::TT_EOF, "", currentIndex, currentIndex, currentLine);
+    		return Token(Token::TT_EOF, "end of stream", currentIndex, currentIndex, currentLine);
     	}
 
     	int startLine = currentLine;
@@ -198,7 +198,7 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_COMPILER, "Unexpected character");
 		}
 
-    	return Token(Token::TT_EOF, "EOF", currentIndex, currentIndex, currentLine);
+    	return Token(Token::TT_EOF, "end of stream", currentIndex, currentIndex, currentLine);
     }
 
 

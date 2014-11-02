@@ -32,8 +32,11 @@ namespace Scales
 		//Create&Get -> The create function takes only explicitly needed attributes. It returns
 		//a pointer to a modifiable object in which all other attributes can be set.
 		//All get functions should be const and should return const data if they return pointers, so a Class can be "finalized" by storing it as const
+
 		Function *createFunction(const String &functionName, const TypeList &paramTypes);
 		void removeFunction(const Function *func);
+		const std::vector<const Function*> listFunctions() const;
+		const std::vector<const Function*> listFunctionsByName(const String &pName) const;
 		const Function *getFunction(const String &functionName, const TypeList &paramTypes) const;
 		const Function *getJoinedFunction(const String &functionName, const TypeList &paramTypes) const;
 
