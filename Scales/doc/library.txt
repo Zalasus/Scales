@@ -1,0 +1,32 @@
+
+Scales library file format
+--------------------------
+
+(file header)
+
+byte[7]: magic ID = "SLIB847"
+byte: bytecode version
+int: count of classes in library
+int: extra data length (the amount of bytes given by this field may be used depending on the implementation)
+
+byte[extra data length]: extra data
+
+(end of header)
+
+(record)
+
+byte: record type (for classes it's 0xCA, only defined record type for now)
+int: record length
+tstring: namespace
+tstring: classname
+short: class flags
+tstring: native link (is empty string = zero byte for unlinked script)
+byte: count of superclasses (currently only valid if zero or one)
+{tstring: namespace, tstring: classname}[count of superclasses]: identifiers of superclasses 
+int: length of bytecode
+byte[length of bytecode]: bytecode
+
+(end of record)
+
+
+
