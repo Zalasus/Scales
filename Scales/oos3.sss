@@ -168,6 +168,7 @@ class Main extends App links Scales_App
 
 end 
 
+namespace inheritance;
 
 class sup
 
@@ -179,8 +180,66 @@ end
 
 class sub extends sup
 
+	public string i;
+
+	func void f()
 	
+		i = "asdf";
 	
+		parent.i = 10;
+		
+		
+	
+	end
+	
+
+end
+
+
+namespace threading;
+
+class test1
+
+	public int foo = 100;
+
+	# assume this function is called by thread A
+	func void doStuff()
+	
+		if(foo == 100)
+		
+			foo = 0;
+	
+		elseif(foo == 101)
+		
+			foo = 1;
+		
+		else
+		
+			foo == -1;
+		
+		end
+	
+		do
+		
+			int i = 1;
+			
+		while((foo -= 1) > 0);
+	
+	end
+
+
+end
+
+class test2 links scales_ni_threading_test
+
+	native func void nativeFunc();
+
+	# assume this function is called by thread B
+	func void doDifferentStuff()
+	
+		nativeFunc();
+	
+	end
 
 end
 

@@ -12,46 +12,32 @@
 namespace Scales
 {
 
-	enum memoryManagementPolicy_t
+	class IValue //interface for polymorphic memory elements
 	{
-		MMP_KEEP_FOREVER = 1,
-		MMP_KEEP_WHEN_USED = 2,
+		virtual ~IValue();
 	};
 
-	class Managed
+	class Managed {};
+
+	class Value{};
+
+	class MemoryElement //pointer compound used
 	{
 	public:
 
-		virtual ~Managed() = 0;
-
-		virtual memoryManagementPolicy_t getManagementPolicy() = 0;
-		virtual size_t getUserCount() = 0;
-	};
-
-	class MemPtr
-	{
-	public:
-
-		//We need a smart pointer class that simplifies access of the VMs memory
-
-		MemPtr(const MemPtr &pPtr);
-
-		Value &operator*();
-		Value *operator->();
+		enum storageType_t
+		{
+			ST_MAPPED,
+			ST_STORED
+		};
 
 	private:
 
+		DataType type;
+		storageType_t storType;
+		IValue *value;
+
 	};
-
-	class Value : public Managed
-	{
-		~Value();
-
-		memoryManagementPolicy_t getManagementPolicy();
-		size_t getUserCount();
-	};
-
-	typedef std::vector<Value> ValueList;
 }
 
 

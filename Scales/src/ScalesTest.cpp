@@ -81,14 +81,14 @@ int main()
 	}
 
 
-	Scales::Thread *t = root.createThread();
+	/*Scales::Thread *t = root.createThread();
 
 	if(mainClass != nullptr)
 	{
 		const Scales::Function *mainFunc = mainClass->getFunction("main",Scales::TypeList());
 
 		t->call(*mainClass, *mainFunc, Scales::ValueList());
-	}
+	}*/
 
 
 	return 0;

@@ -68,6 +68,7 @@ namespace Scales
 		OP_PUSH_STRING,
 		OP_PUSH_NULL,
 		OP_PUSH_THIS,
+		OP_PUSH_PARENT,
 		OP_NEW
 
 	};

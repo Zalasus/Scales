@@ -16,14 +16,33 @@ namespace Scales
 
 	//Helper classes for the compiler
 
-	enum blockType_t
+	class BlockInfo
 	{
-		BT_FUNC,
-		BT_IF,
-		BT_ELSEIF,
-		BT_ELSE,
-		BT_WHILE,
-		BT_SUB
+	public:
+
+		enum blockType_t
+		{
+			BT_FUNC,
+			BT_IF,
+			BT_ELSEIF,
+			BT_ELSE,
+			BT_WHILE,
+			BT_DOWHILE,
+			BT_SUB
+		};
+
+		BlockInfo(uint32_t pLocalCount, uint32_t pStackSize, blockType_t pFollowingBlock);
+
+		uint32_t getLocalCount() const;
+		uint32_t getStackSize() const;
+		blockType_t getFollowingBlock() const;
+
+	private:
+
+		uint32_t localCount;
+		uint32_t stackSize;
+		blockType_t followingBlock;
+
 	};
 
 	class ExpressionInfo
@@ -134,12 +153,12 @@ namespace Scales
         /**
          * @returns The type of block that should start right after conclusion of this block (used for nested if block handling)
          */
-        blockType_t block(blockType_t blockType, const Scope &scope);
+        BlockInfo block(BlockInfo::blockType_t blockType, const Scope &scope);
 
         /**
          * @param blockType This is the BlockType of the the block the if is encountered in. NOT of the if block itself.
          */
-        void ifStatement(const blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock);
+        void ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock);
 
         void usingStatement();
 
@@ -204,6 +223,8 @@ namespace Scales
         bool isAccessModifier(const Token &t);
 
         bool isPrimitive(const Token &t);
+
+        bool isStartOfExpression(const Token &t);
 
         void error(const String &message, int line);
 

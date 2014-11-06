@@ -220,6 +220,10 @@ namespace Scales
 
     				}else if(t.is(Token::TT_KEYWORD, "native"))
     				{
+    					if(currentClass->getNativeTarget().empty())
+    					{
+    						error("Native modifier can't be used in unlinked classes", t.getLine());
+    					}
 
     					flagToBeSet = VF_NATIVE;
 
@@ -397,37 +401,93 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "while"))
 			{
+				if(blockType == BT_DOWHILE) //a while closes a do-while block in the way an "end" does
+				{
+
+					break; //further processing after end of loop
+
+				}else
+				{
+					lexer.readToken();
+
+					int32_t currentWhileUID = getNewUID();
+
+					writeASM(String("while_uid") + currentWhileUID + "_start:");
+					asmout.defineMarker(String("while_uid") + currentWhileUID + "_start");
+
+					ExpressionInfo info = expression(true, scope);
+					if(!info.getType().isNumeric())
+					{
+						error("Loop condition in while statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", t.getLine());
+					}
+
+					writeASM(String("JUMPFALSE while_uid") + currentWhileUID + "_end");
+					asmout << OP_JUMP_IF_FALSE;
+					asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
+
+					writeASM("BEGIN x");
+					asmout << OP_BEGIN;
+					asmout.writeMarker(String("block_uid") + currentWhileUID + "_localCount");
+
+					BlockInfo binf = block(BlockInfo::BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
+
+					asmout.defineMarker(String("block_uid") + currentWhileUID + "_localCount", binf.getLocalCount());
+
+					writeASM(String("END ") + binf.getLocalCount());
+					asmout << OP_END;
+					asmout.writeUInt(binf.getLocalCount());
+
+					writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
+					asmout << OP_JUMP;
+					asmout.writeMarker(String("while_uid") + currentWhileUID + "_start");
+
+					writeASM(String("while_uid") + currentWhileUID + "_end:");
+					asmout.defineMarker(String("while_uid") + currentWhileUID + "_end");
+				}
+
+			}else if(t.is(Token::TT_KEYWORD, "do"))
+			{
 				lexer.readToken();
 
-				int32_t currentWhileUID = getNewUID();
+				int32_t currentDoWhileUID = getNewUID();
 
-				writeASM(String("while_uid") + currentWhileUID + "_start:");
-				asmout.defineMarker(String("while_uid") + currentWhileUID + "_start");
+				writeASM(String("dowhile_uid") + currentDoWhileUID + "_start:");
+				asmout.defineMarker(String("dowhile_uid") + currentDoWhileUID + "_start");
+
+
+				writeASM("BEGIN x");
+				asmout << OP_BEGIN;
+				asmout.writeMarker(String("block_uid") + currentDoWhileUID + "_localCount");
+
+				BlockInfo binf = block(BlockInfo::BT_DOWHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentDoWhileUID));
+
+				asmout.defineMarker(String("block_uid") + currentDoWhileUID + "_localCount", binf.getLocalCount());
+
+				writeASM(String("END ") + binf.getLocalCount());
+				asmout << OP_END;
+				asmout.writeUInt(binf.getLocalCount());
+
 
 				ExpressionInfo info = expression(true, scope);
 				if(!info.getType().isNumeric())
 				{
-					error("Loop condition in while statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", t.getLine());
+					error("Loop condition in do-while statement must be numeric, but non-numeric type " + info.getType().toString() + " was given", t.getLine());
 				}
 
-				writeASM(String("JUMPFALSE while_uid") + currentWhileUID + "_end");
+				writeASM("INVERT"); //TODO: Think of what kind of architecture we want to implement. RISC, so we would do something like what we have here, or CISC, where we would define a new op JUMPTRUE.
+				                    //RISC would make bytecode bigger, but on the other hand it would reduce the number of ops we have to check in the ID cycle.
+				writeASM(String("JUMPFALSE dowhile_uid") + currentDoWhileUID + "_start");
+				asmout << OP_INVERT;
 				asmout << OP_JUMP_IF_FALSE;
-				asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
+				asmout.writeMarker(String("dowhile_uid") + currentDoWhileUID + "_start");
 
-				writeASM("BEGIN");
-				asmout << OP_BEGIN;
+				writeASM(String("#dowhile_uid") + currentDoWhileUID + "_end:");
 
-				block(BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
-
-				writeASM("END");
-				asmout << OP_END;
-
-				writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
-				asmout << OP_JUMP;
-				asmout.writeMarker(String("while_uid") + currentWhileUID + "_start");
-
-				writeASM(String("while_uid") + currentWhileUID + "_end:");
-				asmout.defineMarker(String("while_uid") + currentWhileUID + "_end");
+				Token t2 = lexer.readToken();
+				if(!t2.is(Token::TT_OPERATOR, ";"))
+				{
+					error("Expected semicolon after loop condition of do-while statement, but found: " + t2.getLexem(), t2.getLine());
+				}
 
 			}else if(t.is(Token::TT_KEYWORD, "if"))
 			{
@@ -480,9 +540,15 @@ namespace Scales
 					error("Elseif-block must be part of if-block", t.getLine());
 				}
 
-			}else if(t.is(Token::TT_KEYWORD, "this") || t.is(Token::TT_KEYWORD, "new") || t.is(Token::TT_OPERATOR, "(")) //start of expression
+			}else if(t.is(Token::TT_KEYWORD, "using"))
+    		{
+    			lexer.readToken();
+
+    			usingStatement();
+
+    		}else if(isStartOfExpression(t)) //start of expression
 			{
-				//this, new and openening parentheses may open expressions. If not, they are errors and detected as such by the expression parser
+				//some non-ident-tokens like this, new and openening parentheses may open expressions. If not, they are errors and detected as such by the expression parser
 
 				leftEval(scope);
 
@@ -500,10 +566,10 @@ namespace Scales
 
 		lexer.readToken();
 
-		return BT_FUNC; //Regular processing
+		return BlockInfo::BT_FUNC; //Regular processing (this is NOT the surrounding block. it just means there is no special block type for continuation)
 	}
 
-    void DefaultCompiler::ifStatement(const blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock)
+    void DefaultCompiler::ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock)
     {
     	//Note: The concept of if block parsing was developed back in KniftoScript2 days, and I have completely forgotten if there
     	//were any better solutions that didn't make it into the implementation. Anyway, the current one messes up the whole compiler.
@@ -523,15 +589,17 @@ namespace Scales
 		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
 		asmout << OP_JUMP_IF_FALSE;
 		asmout.writeMarker(String("if_uid") + currentIfUID + "_end");
-		writeASM("BEGIN");
+		writeASM("BEGIN x");
 		asmout << OP_BEGIN;
+		asmout.writeMarker(String("block_uid") + currentIfUID + "_localCount");
 
-		blockType_t bt = block(BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
+		BlockInfo binf = block(BlockInfo::BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
 
-		writeASM("END");
+		writeASM(String("END ") + binf.getLocalCount());
 		asmout << OP_END;
+		asmout.writeUInt(binf.getLocalCount());
 
-		if(bt == BT_ELSE || bt == BT_ELSEIF)
+		if(binf.getFollowingBlock() == BlockInfo::BT_ELSE || binf.getFollowingBlock() == BlockInfo::BT_ELSEIF)
 		{
 			writeASM(String("JUMP if_else_uid") + currentIfUID + "_end");
 			asmout << OP_JUMP;
@@ -541,19 +609,23 @@ namespace Scales
 		writeASM(String("if_uid") + currentIfUID + "_end:");
 		asmout.defineMarker(String("if_uid") + currentIfUID + "_end");
 
-		if(bt == BT_ELSE || bt == BT_ELSEIF)
+		if(binf.getFollowingBlock() == BlockInfo::BT_ELSE || binf.getFollowingBlock() == BlockInfo::BT_ELSEIF)
 		{
 			writeASM(String("# if_else_uid") + currentIfUID + "_start:");
 
-			if(bt == BT_ELSE)
+			if(binf.getFollowingBlock() == BlockInfo::BT_ELSE)
 			{
-				writeASM("BEGIN");
+				uint32_t currentElseUID = getNewUID();
+
+				writeASM("BEGIN x");
 				asmout << OP_BEGIN;
+				asmout.writeMarker(String("block_uid") + currentElseUID + "_localCount");
 
-				block(BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, getNewUID()));
+				BlockInfo binf2 = block(BlockInfo::BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, currentElseUID));
 
-				writeASM("END");
+				writeASM(String("END ") + binf2.getLocalCount());
 				asmout << OP_END;
+				asmout.defineMarker(String("block_uid") + currentElseUID + "_localCount", binf2.getLocalCount());
 			}else
 			{
 				ifStatement(blockType, scope, blocksInThisBlock);
@@ -1831,9 +1903,10 @@ namespace Scales
         		error("Can't access parent in non-extending classes", t.getLine());
         	}
 
-        	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()->getID()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
+        	writeASM("PUSHPARENT");
+        	asmout << OP_PUSH_PARENT;
 
-        	//TODO:further implement parent statement
+        	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()->getID()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
 
         }else if(t.is(Token::TT_KEYWORD,"true"))
         {
@@ -2029,6 +2102,11 @@ namespace Scales
     	return false;
     }
 
+    bool DefaultCompiler::isStartOfExpression(const Token &t)
+    {
+    	return t.is(Token::TT_KEYWORD, "this") || t.is(Token::TT_KEYWORD, "new") || t.is(Token::TT_OPERATOR, "(") || t.is(Token::TT_KEYWORD, "parent");
+    }
+
     bool DefaultCompiler::isAccessModifier(const Token &t)
     {
     	return t.is(Token::TT_KEYWORD, "public") || t.is(Token::TT_KEYWORD, "private"); //TODO: we might store all these keywords and stuff in predefined tokens, so we can do just: t == LE_ACCESS_PUBLIC
@@ -2156,7 +2234,9 @@ namespace Scales
 			"extends",
 			"using",
 			"return",
+			"do",
 			"while",
+			"for",
 			"if",
 			"elseif",
 			"else",
