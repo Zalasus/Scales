@@ -42,6 +42,8 @@ int main()
 
 	//---Example of how to create classes from a script file
 	Scales::Compiler *comp = root.getCompiler(Scales::CF_GENERIC);
+
+	const Scales::Class *mainClass = nullptr;
 	if(comp != nullptr)
 	{
 		//There is a compiler we can use
@@ -58,7 +60,16 @@ int main()
 			{
 				const Scales::Class *cl = *iter;
 
-				std::cout << cl->getID().toString() << "\t" << cl->getFieldCount() << "F\t" << cl->getJoinedFieldCount() << "JF\t" << cl->getProgramSize() << "P" << std::endl;
+				std::cout << cl->getID().toString() << "\t" << cl->getFieldCount() << "F\t" << cl->getJoinedFieldCount() << "JF\t" << cl->getProgramSize() << "P";
+
+				if(cl->getFunction("main",Scales::TypeList()) != nullptr)
+				{
+					std::cout << "\tMAIN";
+
+					mainClass = cl;
+				}
+
+				std::cout << std::endl;
 			}
 
 		}catch(Scales::Exception &e)
@@ -69,6 +80,15 @@ int main()
 		}
 	}
 
+
+	Scales::Thread *t = root.createThread();
+
+	if(mainClass != nullptr)
+	{
+		const Scales::Function *mainFunc = mainClass->getFunction("main",Scales::TypeList());
+
+		t->call(*mainClass, *mainFunc, Scales::ValueList());
+	}
 
 
 	return 0;

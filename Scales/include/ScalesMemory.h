@@ -28,12 +28,30 @@ namespace Scales
 		virtual size_t getUserCount() = 0;
 	};
 
-	class Value : public Managed
+	class MemPtr
 	{
+	public:
 
+		//We need a smart pointer class that simplifies access of the VMs memory
 
+		MemPtr(const MemPtr &pPtr);
+
+		Value &operator*();
+		Value *operator->();
+
+	private:
 
 	};
+
+	class Value : public Managed
+	{
+		~Value();
+
+		memoryManagementPolicy_t getManagementPolicy();
+		size_t getUserCount();
+	};
+
+	typedef std::vector<Value> ValueList;
 }
 
 

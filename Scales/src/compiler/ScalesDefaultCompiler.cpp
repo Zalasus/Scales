@@ -1823,6 +1823,18 @@ namespace Scales
         		return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getID()), false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
         	}
 
+        }else if(t.is(Token::TT_KEYWORD,"parent"))
+        {
+
+        	if(currentClass->getSuperclass() == nullptr)
+        	{
+        		error("Can't access parent in non-extending classes", t.getLine());
+        	}
+
+        	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()->getID()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
+
+        	//TODO:further implement parent statement
+
         }else if(t.is(Token::TT_KEYWORD,"true"))
         {
         	writeASM("PUSHINT 1");
@@ -1927,7 +1939,7 @@ namespace Scales
 
     		}else
     		{
-    			//not in current namespace. take id as it is (looking in default namespace)
+    			//not in current namespace. take id as it is (looking in default namespace). if that's null, we don't give a shit
     			return root->getClass(classID);
     		}
 
@@ -1939,7 +1951,7 @@ namespace Scales
 
     const Class *DefaultCompiler::lookupClassByName(const String &name)
     {
-    	return lookupClass(ClassID("", name)); //TODO: I don't like how this is looking (also the above function). Better make tis a bit more fancy
+    	return lookupClass(ClassID("", name)); //TODO: I don't like how this is looking (also the above function). Better make tis a bit fancier
     }
 
     void DefaultCompiler::writeDatatypeToBytecode(const DataType &t)
@@ -2151,6 +2163,7 @@ namespace Scales
 			"break",
 			"null",
 			"this",
+			"parent",
 			"goto",
 			"new",
 			"init",

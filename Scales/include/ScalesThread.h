@@ -16,6 +16,9 @@ namespace Scales
 
 	class Thread
 	{
+	public:
+
+		Value call(const Class &pClass, const Function &pFunc, const ValueList &params);
 
 	};
 
