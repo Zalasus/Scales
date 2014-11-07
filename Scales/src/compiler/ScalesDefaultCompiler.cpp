@@ -323,10 +323,19 @@ namespace Scales
     	classList.push_back(currentClass); //The class is finished, so store it for listing
     }
 
-    blockType_t DefaultCompiler::block(blockType_t blockType, const Scope &scope)
+    BlockInfo DefaultCompiler::block(BlockInfo::blockType_t blockType, const Scope &scope)
 	{
     	uint32_t blocksInThisBlock = 0;
+    	uint32_t localsInThisBlock = 0;
 
+    	BlockInfo::blockType_t nextBlock = BlockInfo::BT_FUNC;
+
+    	if(blockType != BlockInfo::BT_FUNC) //Block header of function blocks are created by the function declaration routine
+    	{
+    		writeASM("BEGIN x");
+    		asmout << OP_BEGIN;
+    		asmout.writeMarker(String("block_uid") + scope.getUniqueId() + "_localCount");
+    	}
 
 		Token t = lexer.peekToken();
 
@@ -348,6 +357,7 @@ namespace Scales
 			}else if(isPrimitive(t)) //private variable
 			{
 				variableDec(VF_LOCAL | VF_PRIVATE, scope);
+				localsInThisBlock++; //TODO: We need to ensure the above statement alway creates only ONE local
 
 			}else if(isAccessModifier(t) || t.is(Token::TT_KEYWORD, "native") || t.is(Token::TT_KEYWORD, "static"))
 			{
@@ -357,13 +367,9 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				writeASM("BEGIN");
-				asmout << OP_BEGIN;
+				BlockInfo binf = block(BlockInfo::BT_SUB, Scope(scope.getNestId() + 1, blocksInThisBlock++, getNewUID()));
 
-				block(BT_SUB, Scope(scope.getNestId() + 1, blocksInThisBlock++, getNewUID()));
-
-				writeASM("END");
-				asmout << OP_END;
+				localsInThisBlock += binf.getLocalCount();
 
 			}else if(t.is(Token::TT_KEYWORD, "return"))
 			{
@@ -401,7 +407,7 @@ namespace Scales
 
 			}else if(t.is(Token::TT_KEYWORD, "while"))
 			{
-				if(blockType == BT_DOWHILE) //a while closes a do-while block in the way an "end" does
+				if(blockType == BlockInfo::BT_DOWHILE) //a while closes a do-while block in the way an "end" does
 				{
 
 					break; //further processing after end of loop
@@ -425,17 +431,9 @@ namespace Scales
 					asmout << OP_JUMP_IF_FALSE;
 					asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
 
-					writeASM("BEGIN x");
-					asmout << OP_BEGIN;
-					asmout.writeMarker(String("block_uid") + currentWhileUID + "_localCount");
-
 					BlockInfo binf = block(BlockInfo::BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
 
-					asmout.defineMarker(String("block_uid") + currentWhileUID + "_localCount", binf.getLocalCount());
-
-					writeASM(String("END ") + binf.getLocalCount());
-					asmout << OP_END;
-					asmout.writeUInt(binf.getLocalCount());
+					localsInThisBlock += binf.getLocalCount();
 
 					writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
 					asmout << OP_JUMP;
@@ -455,17 +453,9 @@ namespace Scales
 				asmout.defineMarker(String("dowhile_uid") + currentDoWhileUID + "_start");
 
 
-				writeASM("BEGIN x");
-				asmout << OP_BEGIN;
-				asmout.writeMarker(String("block_uid") + currentDoWhileUID + "_localCount");
-
 				BlockInfo binf = block(BlockInfo::BT_DOWHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentDoWhileUID));
 
-				asmout.defineMarker(String("block_uid") + currentDoWhileUID + "_localCount", binf.getLocalCount());
-
-				writeASM(String("END ") + binf.getLocalCount());
-				asmout << OP_END;
-				asmout.writeUInt(binf.getLocalCount());
+				localsInThisBlock += binf.getLocalCount();
 
 
 				ExpressionInfo info = expression(true, scope);
@@ -493,18 +483,21 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				ifStatement(blockType, scope, blocksInThisBlock);
+				BlockInfo binf = ifStatement(blockType, scope, blocksInThisBlock);
+
+				localsInThisBlock += binf.getLocalCount();
 
 			}else if(t.is(Token::TT_KEYWORD, "else"))
 			{
 				lexer.readToken();
 
-				if(blockType == BT_IF)
+				if(blockType == BlockInfo::BT_IF)
 				{
 
-					return BT_ELSE; //Returns to ifStatement(), further processing happens there
+					nextBlock = BlockInfo::BT_ELSE;
+					break; //Returns to ifStatement() after loop end, further processing happens there
 
-				}else if(blockType == BT_ELSEIF)
+				}else if(blockType == BlockInfo::BT_ELSEIF)
 				{
 
 					//Should never occur. Don't take it seriously
@@ -519,18 +512,19 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				if(blockType == BT_IF)
+				if(blockType == BlockInfo::BT_IF)
 				{
 
-					return BT_ELSEIF; //Returns to ifStatement(), further processing happens there
+					nextBlock = BlockInfo::BT_ELSEIF;
+					break; //Returns to ifStatement() after end of loop, further processing happens there
 
-				}else if(blockType == BT_ELSEIF)
+				}else if(blockType == BlockInfo::BT_ELSEIF)
 				{
 
 					//Should never occur. Don't take it seriously
 					error("[COMPILER BUG] I'm sorry, Dave. I'm afraid I can't do that.", t.getLine());
 
-				}else if(blockType == BT_ELSE)
+				}else if(blockType == BlockInfo::BT_ELSE)
 				{
 
 					error("Else-block must be defined before else-block", t.getLine());
@@ -566,10 +560,16 @@ namespace Scales
 
 		lexer.readToken();
 
-		return BlockInfo::BT_FUNC; //Regular processing (this is NOT the surrounding block. it just means there is no special block type for continuation)
+		writeASM(String("END ") + localsInThisBlock); //block footer is always generated; no need to check for func
+		asmout << OP_END;
+		asmout.writeUInt(localsInThisBlock);
+
+		asmout.defineMarker(String("block_uid") + scope.getUniqueId() + "_localCount", localsInThisBlock);
+
+		return BlockInfo(localsInThisBlock, 0, nextBlock); //return to surrounding block
 	}
 
-    void DefaultCompiler::ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock)
+    BlockInfo DefaultCompiler::ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock)
     {
     	//Note: The concept of if block parsing was developed back in KniftoScript2 days, and I have completely forgotten if there
     	//were any better solutions that didn't make it into the implementation. Anyway, the current one messes up the whole compiler.
@@ -577,6 +577,8 @@ namespace Scales
     	//improve this so the code becomes more structured and clearer. TODO: Maybe improve if block parsing
 
     	//And also: TODO: I have a bad feeling about this function. Check if everything would work as intended
+
+    	uint32_t localsInThisIf = 0;
 
     	ExpressionInfo info = expression(true, scope);
 		if(!info.getType().isNumeric())
@@ -589,15 +591,10 @@ namespace Scales
 		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
 		asmout << OP_JUMP_IF_FALSE;
 		asmout.writeMarker(String("if_uid") + currentIfUID + "_end");
-		writeASM("BEGIN x");
-		asmout << OP_BEGIN;
-		asmout.writeMarker(String("block_uid") + currentIfUID + "_localCount");
 
 		BlockInfo binf = block(BlockInfo::BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
 
-		writeASM(String("END ") + binf.getLocalCount());
-		asmout << OP_END;
-		asmout.writeUInt(binf.getLocalCount());
+		localsInThisIf += binf.getLocalCount();
 
 		if(binf.getFollowingBlock() == BlockInfo::BT_ELSE || binf.getFollowingBlock() == BlockInfo::BT_ELSEIF)
 		{
@@ -617,23 +614,22 @@ namespace Scales
 			{
 				uint32_t currentElseUID = getNewUID();
 
-				writeASM("BEGIN x");
-				asmout << OP_BEGIN;
-				asmout.writeMarker(String("block_uid") + currentElseUID + "_localCount");
-
 				BlockInfo binf2 = block(BlockInfo::BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, currentElseUID));
 
-				writeASM(String("END ") + binf2.getLocalCount());
-				asmout << OP_END;
-				asmout.defineMarker(String("block_uid") + currentElseUID + "_localCount", binf2.getLocalCount());
+				localsInThisIf += binf2.getLocalCount();
+
 			}else
 			{
-				ifStatement(blockType, scope, blocksInThisBlock);
+				BlockInfo binf2 = ifStatement(blockType, scope, blocksInThisBlock);
+
+				localsInThisIf += binf2.getLocalCount();
 			}
 
 			writeASM(String("if_else_uid") + currentIfUID + "_end:");
 			asmout.defineMarker(String("if_else_uid") + currentIfUID + "_end");
 		}
+
+		return BlockInfo(localsInThisIf, 0, BlockInfo::BT_FUNC);
     }
 
     void DefaultCompiler::usingStatement()
@@ -927,8 +923,9 @@ namespace Scales
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start:");
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID +  "_start");
 
-		writeASM("BEGIN");
+		writeASM("BEGIN x");
 		asmout << OP_BEGIN;
+		asmout.writeMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_localCount");
 
 		locals.clear(); //delete any locals remaining from the last compiled function
 
@@ -965,12 +962,11 @@ namespace Scales
 			asmout.writeBString(paraName);
 		}
 
-		block(BT_FUNC, scopeOfFuncBlock);
+		BlockInfo binf = block(BlockInfo::BT_FUNC, scopeOfFuncBlock);
+
+		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_localCount", binf.getLocalCount());
 
 		//TODO: Check if we need to output a return here
-
-		writeASM("END");
-		asmout << OP_END;
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
@@ -2304,6 +2300,30 @@ namespace Scales
 	const uint32_t DefaultCompiler::OPERATOR_COUNT = sizeof(OPERATORS)/sizeof(String);
 
 
+	//class BlockInfo
+
+	BlockInfo::BlockInfo(uint32_t pLocalCount, uint32_t pStackSize, blockType_t pFollowingBlock)
+	: localCount(pLocalCount),
+	  stackSize(pStackSize),
+	  followingBlock(pFollowingBlock)
+	{
+	}
+
+	uint32_t BlockInfo::getLocalCount() const
+	{
+		return localCount;
+	}
+
+	uint32_t BlockInfo::getStackSize() const
+	{
+		return stackSize;
+	}
+
+	BlockInfo::blockType_t BlockInfo::getFollowingBlock() const
+	{
+		return followingBlock;
+	}
+
     //private class ExpressionInfo
 
     ExpressionInfo::ExpressionInfo(const DataType &dtype, const bool cons, const FactorType ftype) : dataType(dtype), constant(cons), factorType(ftype)
@@ -2325,6 +2345,7 @@ namespace Scales
     {
     	return dataType;
     }
+
 
 
     Scope::Scope(uint32_t pNestId, uint32_t pRowId, uint32_t pUniqueId)

@@ -158,7 +158,7 @@ namespace Scales
         /**
          * @param blockType This is the BlockType of the the block the if is encountered in. NOT of the if block itself.
          */
-        void ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock);
+        BlockInfo ifStatement(const BlockInfo::blockType_t &blockType, const Scope &scope, uint32_t &blocksInThisBlock);
 
         void usingStatement();
 

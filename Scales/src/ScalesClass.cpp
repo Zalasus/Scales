@@ -176,6 +176,19 @@ namespace Scales
 		return nullptr;
 	}
 
+	const Field *Class::getFieldWithID(uint32_t i) const
+	{
+		for(auto it = fields.begin(); it != fields.end(); i++)
+		{
+			if((*it)->getIndex() == i)
+			{
+				return *it;
+			}
+		}
+
+		return nullptr;
+	}
+
 	const Field *Class::getJoinedField(const String &fieldName) const
 	{
 		const Field *f = getField(fieldName);

@@ -49,7 +49,8 @@ namespace Scales
 
 
 	DataType::DataType(DataType::dataTypeBase_t pBase)
-	 : DataType(pBase, ClassID::EMPTY)
+	: base(pBase),
+	  classID(ClassID::EMPTY)
 	{
 	}
 
@@ -210,5 +211,13 @@ namespace Scales
 			return DTB_VOID;
 		}
 	}
+
+	const DataType DataType::INT = DataType(DataType::DTB_INT);
+	const DataType DataType::LONG = DataType(DataType::DTB_LONG);
+	const DataType DataType::FLOAT = DataType(DataType::DTB_FLOAT);
+	const DataType DataType::DOUBLE = DataType(DataType::DTB_DOUBLE);
+	const DataType DataType::STRING = DataType(DataType::DTB_STRING);
+	const DataType DataType::ABSTRACT_OBJECT = DataType(DataType::DTB_ABSTRACT_OBJECT);
+	const DataType DataType::_VOID = DataType(DataType::DTB_VOID);
 
 }

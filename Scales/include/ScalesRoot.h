@@ -39,7 +39,12 @@ namespace Scales
 		const std::vector<const Class*> listClasses();
 		const std::vector<const Class*> listClassesInNamespace(const String &nspace);
 
-		Object *createObject(const Class *c);
+		/**
+		 * Creates a new object. Attention: Once the program looses track of the returned pointer, there is no way
+		 * of retrieving it, thus rendering the Object useless. Unused Objects are cleaned up automatically if the GC
+		 * is running, or at the latest after the destruction of the Root object.
+		 */
+		Object *createObject(const Class &c);
 		Object *createObject(const ClassID &classId);
 
 		Thread *createThread();
@@ -49,7 +54,7 @@ namespace Scales
 
 		std::vector<Class*> classes;
 
-		std::vector<Managed*> managedStuff;
+		std::vector<Object*> objects;
 
 		Compiler *compiler;
 	};

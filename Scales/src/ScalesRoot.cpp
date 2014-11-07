@@ -21,7 +21,17 @@ namespace Scales
 
 	Root::~Root()
 	{
-		delete compiler;
+		SCALES_DELETE compiler;
+
+		for(auto iter = classes.begin(); iter != classes.end(); iter++)
+		{
+			SCALES_DELETE *iter;
+		}
+
+		for(auto iter = objects.begin(); iter != objects.end(); iter++)
+		{
+			SCALES_DELETE *iter;
+		}
 	}
 
 	Compiler *Root::getCompiler(compilerFlags_t compilerFlags)
@@ -98,6 +108,15 @@ namespace Scales
 		}
 
 		return newList;
+	}
+
+	Object *Root::createObject(const Class &c)
+	{
+		Object *o = SCALES_NEW Object(c);
+
+		objects.push_back(o);
+
+		return o;
 	}
 
 }

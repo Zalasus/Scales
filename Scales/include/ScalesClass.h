@@ -42,6 +42,7 @@ namespace Scales
 
 		Field *createField(const String &fieldName, const DataType &type); //Note: The supeclass is known at instantiation, so this method calculates the proper field index right at calling and gives it to the field constructor TODO: put this in a doxy
 		const Field *getField(const String &fieldName) const;
+		const Field *getFieldWithID(uint32_t i) const; //TODO: Make ID the key attribute
 		/**
 		 * \return A pointer to a Field object of this class or it's superclass.
 		 */

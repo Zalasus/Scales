@@ -70,6 +70,14 @@ namespace Scales
 		static DataType mathCast(const DataType &left, const DataType &right);
 		static dataTypeBase_t byName(const String &name);
 
+		static const DataType INT;
+		static const DataType LONG;
+		static const DataType FLOAT;
+		static const DataType DOUBLE;
+		static const DataType STRING;
+		static const DataType ABSTRACT_OBJECT;
+		static const DataType _VOID;
+
 	private:
 
 		dataTypeBase_t base;
