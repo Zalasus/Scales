@@ -178,11 +178,11 @@ namespace Scales
 
 	const Field *Class::getFieldWithID(uint32_t i) const
 	{
-		for(auto it = fields.begin(); it != fields.end(); i++)
+		for(auto iter = fields.begin(); iter != fields.end(); iter++)
 		{
-			if((*it)->getIndex() == i)
+			if((*iter)->getIndex() == i)
 			{
-				return *it;
+				return *iter;
 			}
 		}
 

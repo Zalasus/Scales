@@ -409,6 +409,7 @@ namespace Scales
 			{
 				if(blockType == BlockInfo::BT_DOWHILE) //a while closes a do-while block in the way an "end" does
 				{
+					lexer.readToken(); //consume the while, then return
 
 					break; //further processing after end of loop
 
@@ -558,7 +559,10 @@ namespace Scales
 			t = lexer.peekToken();
 		}
 
-		lexer.readToken();
+		if(t.is(Token::TT_KEYWORD, "end")) //if there was an "end", consume it. otherwise, leave the token in the stream
+		{
+			lexer.readToken();
+		}
 
 		writeASM(String("END ") + localsInThisBlock); //block footer is always generated; no need to check for func
 		asmout << OP_END;

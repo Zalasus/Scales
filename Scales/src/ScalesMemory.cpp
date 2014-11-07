@@ -30,6 +30,8 @@ namespace Scales
 		case DataType::DTB_STRING:
 			return SCALES_NEW IValueImpl<String>();
 
+		default:
+			return nullptr;
 		}
 
 		return nullptr;

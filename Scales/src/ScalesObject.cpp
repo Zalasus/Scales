@@ -9,6 +9,8 @@
 #include "ScalesUtil.h"
 #include "ScalesException.h"
 
+#include <iostream>
+
 namespace Scales
 {
 
