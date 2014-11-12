@@ -36,7 +36,7 @@ namespace Scales
 		currentClass(nullptr),
 		currentFunction(nullptr),
 		lastUID(0),
-		lexer(KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
+		lexer(Lexer::CODING_ASCII, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
     {
     }
 
@@ -148,14 +148,14 @@ namespace Scales
 			error("Double definition of class " + id.toString(), t.getLine());
 		}
 
-		if(t.is(Token::TT_KEYWORD, "links"))
+		if(t.is(Token::TT_KEYWORD, "binds"))
 		{
-			lexer.readToken(); //Consume the "links" keyword
+			lexer.readToken(); //Consume the "binds" keyword
 
 			t = lexer.readToken();
 			if(t.getType() != Token::TT_IDENT)
 			{
-				error("Expected native link unit name after links keyword, but found: " + t.getLexem(), t.getLine());
+				error("Expected native bind unit name after binds keyword, but found: " + t.getLexem(), t.getLine());
 			}
 
 			currentClass->setNativeTarget(t.getLexem());
@@ -222,7 +222,7 @@ namespace Scales
     				{
     					if(currentClass->getNativeTarget().empty())
     					{
-    						error("Native modifier can't be used in unlinked classes", t.getLine());
+    						error("Native modifier can't be used in unbound classes", t.getLine());
     					}
 
     					flagToBeSet = VF_NATIVE;
@@ -976,19 +976,11 @@ namespace Scales
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
     }
 
-    DataType DefaultCompiler::functionCall(const String &funcName, bool member, const Scope &scope, const DataType &baseType)
+    TypeList DefaultCompiler::parameterList(const Scope &scope)
     {
-		Token t = lexer.readToken();
-		if(!t.is(Token::TT_OPERATOR,"("))
-		{
-			error("Expected opening parentheses after function name in function call", t.getLine());
-		}
-
-		int paramCount = 0;
-
 		TypeList paramTypes;
 
-		t = lexer.peekToken();
+		Token t = lexer.peekToken();
 		if(!t.is(Token::TT_OPERATOR,")"))
 		{
 
@@ -998,7 +990,6 @@ namespace Scales
 
 				paramTypes.push_back(info.getType());
 
-				paramCount++;
 				t = lexer.readToken();
 
 			}while(t.is(Token::TT_OPERATOR,","));
@@ -1012,6 +1003,19 @@ namespace Scales
 		{
 			lexer.readToken();
 		}
+
+		return paramTypes;
+    }
+
+    DataType DefaultCompiler::functionCall(const String &funcName, bool member, const Scope &scope, const DataType &baseType)
+    {
+		Token t = lexer.readToken();
+		if(!t.is(Token::TT_OPERATOR,"("))
+		{
+			error("Expected opening parentheses after function name in function call", t.getLine());
+		}
+
+		TypeList paramTypes = parameterList(scope);
 
 		if(member)
 		{
@@ -1045,10 +1049,10 @@ namespace Scales
 				error("Non-native function '" + Function::getInfoString(funcName, paramTypes) + "' in given object type class '" + baseType.toString() + "' was declared but never defined", t.getLine());
 			}
 
-			writeASM("CALLMEMBER '" + funcName + "'," + paramCount);
-			asmout << OP_CALLMEMBER;
+			writeASM("CALLMEMBER '" + funcName + "'," + paramTypes.size());
+			asmout << OP_CALL_MEMBER;
 			asmout.writeBString(funcName);
-			asmout.writeUByte(paramCount);
+			asmout.writeUByte(paramTypes.size());
 
 			return membFunction->getReturnType();
 
@@ -1063,10 +1067,10 @@ namespace Scales
 
 			//No need to check for private, as we are calling from the same class
 			
-			writeASM("CALL '" + funcName + "'," + paramCount); //TODO: We might direct the call to the respective superclass if it is not defined in the current one
+			writeASM("CALL '" + funcName + "'," + paramTypes.size());
 			asmout << OP_CALL;
 			asmout.writeBString(funcName);
-			asmout.writeUByte(paramCount);
+			asmout.writeUByte(paramTypes.size());
 
 			return ownFunction->getReturnType();
 		}
@@ -1731,12 +1735,126 @@ namespace Scales
 
         }else if(t.getType() == Token::TT_IDENT)
         {
+        	//TODO: This whole part is most disgusting. Exchange it with something more efficient, and with less redundant code
+
             Token t2 = lexer.peekToken();
             if(t2.is(Token::TT_OPERATOR,"("))
             {
                 DataType type = functionCall(t.getLexem(), false, expressionScope);
 
                 return ExpressionInfo(type, false, (type == DataType::DTB_VOID) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
+
+            }else if(t2.is(Token::TT_OPERATOR, ":"))
+            {
+            	lexer.readToken();
+
+            	Token secondIdent = lexer.readToken();
+            	if(!secondIdent.isType(Token::TT_IDENT))
+            	{
+            		error("Expected identifier after scope operator, but found: " + secondIdent.getLexem(), secondIdent.getLine());
+            	}
+
+            	t2 = lexer.peekToken();
+            	if(t2.is(Token::TT_OPERATOR, ":")) //static call / static variable access
+            	{
+            		ClassID targetClassID = ClassID(t.getLexem(), secondIdent.getLexem());
+            		const Class *targetClass = root->getClass(targetClassID);
+					if(targetClass == nullptr)
+					{
+						error("Given class " + targetClassID.toString() + " was not defined. ", secondIdent.getLine());
+					}
+
+            		lexer.readToken();
+            		Token thirdIdent = lexer.readToken();
+            		if(!thirdIdent.isType(Token::TT_IDENT))
+					{
+						error("Expected identifier after scope operator, but found: " + thirdIdent.getLexem(), thirdIdent.getLine());
+					}
+
+            		t2 = lexer.readToken();
+            		if(t2.is(Token::TT_OPERATOR, "(")) //static call
+            		{
+
+            			TypeList paramTypes = parameterList(expressionScope);
+
+            			const Function *targetFunc = targetClass->getFunction(thirdIdent.getLexem(), paramTypes);
+            			if(targetFunc == nullptr)
+            			{
+            				error("Static function " + Function::getInfoString(targetClassID.toString() + ":" + thirdIdent.getLexem(), paramTypes) + " was not defined", thirdIdent.getLine());
+            			}
+
+            			if(!targetFunc->isStatic())
+            			{
+            				error("Can not call non-static function " + Function::getInfoString(targetClassID.toString() + ":" + thirdIdent.getLexem(), paramTypes) + " in static context", thirdIdent.getLine());
+            			}
+
+            			asmout << OP_CALL_STATIC;
+            			asmout.writeBString(t.getLexem());
+            			asmout.writeBString(secondIdent.getLexem());
+            			asmout.writeBString(thirdIdent.getLexem());
+            			asmout.writeUByte(paramTypes.size());
+
+
+            			return ExpressionInfo(targetFunc->getReturnType(), false, (targetFunc->getReturnType() == DataType::DTB_VOID) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
+
+            		}else // static variable access
+            		{
+            			const Field *targetField = targetClass->getField(thirdIdent.getLexem());
+
+            			if(targetField == nullptr)
+						{
+							error("Static field " + targetClassID.toString() + ":" + thirdIdent.getLexem() + " was not declared", thirdIdent.getLine());
+						}
+
+						if(!targetField->isStatic())
+						{
+							error("Can not access non-static field " + targetClassID.toString() + ":" + thirdIdent.getLexem() + " in static context", thirdIdent.getLine());
+						}
+
+						asmout << OP_PUSHREF_STATIC;
+						asmout.writeBString(t.getLexem());
+						asmout.writeBString(secondIdent.getLexem());
+						asmout.writeBString(thirdIdent.getLexem());
+
+						return targetField->getType();
+            		}
+
+            	}else if(t2.is(Token::TT_OPERATOR, "(")) //static call (of class in default/imported ns)
+            	{
+					const Class *targetClass = lookupClass(ClassID("",t.getLexem()));
+					if(targetClass == nullptr)
+					{
+						error("Given class " + t.getLexem() + " was not found in imported/local/default namespace", t.getLine());
+					}
+
+            		TypeList paramTypes = parameterList(expressionScope);
+
+					const Function *targetFunc = targetClass->getFunction(secondIdent.getLexem(), paramTypes);
+					if(targetFunc == nullptr)
+					{
+						error("Static function " + Function::getInfoString(targetClass->getID().toString() + ":" + secondIdent.getLexem(), paramTypes) + " was not defined", secondIdent.getLine());
+					}
+
+					if(!targetFunc->isStatic())
+					{
+						error("Can not call non-static function " + Function::getInfoString(targetClass->getID().toString() + ":" + secondIdent.getLexem(), paramTypes) + " in static context", secondIdent.getLine());
+					}
+
+					asmout << OP_CALL_STATIC;
+					asmout.writeBString("");
+					asmout.writeBString(t.getLexem());
+					asmout.writeBString(secondIdent.getLexem());
+					asmout.writeUByte(paramTypes.size());
+
+					return ExpressionInfo(targetFunc->getReturnType(), false, (targetFunc->getReturnType() == DataType::DTB_VOID) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
+
+            	}else if(t2.isType(Token::TT_IDENT)) //variable declaration
+            	{
+
+            	}else //static variable access (of class in default/imported ns)
+            	{
+
+            	}
 
             }else
             {
@@ -2230,7 +2348,7 @@ namespace Scales
 			"void",
 			"class",
 			"static",
-			"links",
+			"binds",
 			"extends",
 			"using",
 			"return",

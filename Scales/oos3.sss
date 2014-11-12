@@ -1,7 +1,7 @@
 
 namespace System;
 
-class OutI links nrpg_ni_console
+class OutI binds nrpg_ni_console
 
 	public static native func void println(string s);
 	
@@ -124,7 +124,7 @@ namespace default;
 
 class App end
 
-class Main extends App links Scales_App
+class Main extends App binds Scales_App
 
 	using Util:Integer;
 
@@ -138,6 +138,8 @@ class Main extends App links Scales_App
 		
 		#static calls are not yet supported
 		#System:Out:println("The quick brown fox jumps over the lazy dog");
+	
+		int i = int j;
 	
 		if(i)
 		
@@ -215,7 +217,7 @@ class test1
 	# assume this function is called by thread A
 	func void doStuff()
 	
-		
+	
 	
 		do
 		
@@ -227,7 +229,7 @@ class test1
 
 end
 
-class test2 links scales_ni_threading_test
+class test2 binds scales_ni_threading_test
 
 	native func void nativeFunc();
 

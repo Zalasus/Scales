@@ -179,6 +179,7 @@ namespace Scales
 
         ExpressionInfo staticExpression();
 
+        TypeList parameterList(const Scope &scope);
         DataType functionCall(const String &funcName, bool member, const Scope &scope, const DataType &baseType = DataType(DataType::DTB_VOID));
 
         DataType dataType();

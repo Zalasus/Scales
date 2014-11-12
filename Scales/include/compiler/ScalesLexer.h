@@ -78,7 +78,12 @@ namespace Scales
     {
     public:
 
-        Lexer(const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);
+		enum coding_t
+		{
+			CODING_ASCII
+		};
+
+        Lexer(coding_t pCoding, const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);
         ~Lexer();
 
         void setDataSource(std::istream *in);
