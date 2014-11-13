@@ -367,9 +367,7 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				BlockInfo binf = block(BlockInfo::BT_SUB, Scope(scope.getNestId() + 1, blocksInThisBlock++, getNewUID()));
-
-				localsInThisBlock += binf.getLocalCount();
+				block(BlockInfo::BT_SUB, Scope(scope.getNestId() + 1, blocksInThisBlock++, getNewUID()));
 
 			}else if(t.is(Token::TT_KEYWORD, "return"))
 			{
@@ -432,9 +430,7 @@ namespace Scales
 					asmout << OP_JUMP_IF_FALSE;
 					asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
 
-					BlockInfo binf = block(BlockInfo::BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
-
-					localsInThisBlock += binf.getLocalCount();
+					block(BlockInfo::BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
 
 					writeASM(String("JUMP while_uid") + currentWhileUID + "_start");
 					asmout << OP_JUMP;
@@ -454,9 +450,7 @@ namespace Scales
 				asmout.defineMarker(String("dowhile_uid") + currentDoWhileUID + "_start");
 
 
-				BlockInfo binf = block(BlockInfo::BT_DOWHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentDoWhileUID));
-
-				localsInThisBlock += binf.getLocalCount();
+				block(BlockInfo::BT_DOWHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentDoWhileUID));
 
 
 				ExpressionInfo info = expression(true, scope);
@@ -484,9 +478,7 @@ namespace Scales
 			{
 				lexer.readToken();
 
-				BlockInfo binf = ifStatement(blockType, scope, blocksInThisBlock);
-
-				localsInThisBlock += binf.getLocalCount();
+				ifStatement(blockType, scope, blocksInThisBlock);
 
 			}else if(t.is(Token::TT_KEYWORD, "else"))
 			{
@@ -598,8 +590,6 @@ namespace Scales
 
 		BlockInfo binf = block(BlockInfo::BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
 
-		localsInThisIf += binf.getLocalCount();
-
 		if(binf.getFollowingBlock() == BlockInfo::BT_ELSE || binf.getFollowingBlock() == BlockInfo::BT_ELSEIF)
 		{
 			writeASM(String("JUMP if_else_uid") + currentIfUID + "_end");
@@ -618,15 +608,11 @@ namespace Scales
 			{
 				uint32_t currentElseUID = getNewUID();
 
-				BlockInfo binf2 = block(BlockInfo::BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, currentElseUID));
-
-				localsInThisIf += binf2.getLocalCount();
+				block(BlockInfo::BT_ELSE, Scope(scope.getNestId(), blocksInThisBlock++, currentElseUID));
 
 			}else
 			{
-				BlockInfo binf2 = ifStatement(blockType, scope, blocksInThisBlock);
-
-				localsInThisIf += binf2.getLocalCount();
+				ifStatement(blockType, scope, blocksInThisBlock);
 			}
 
 			writeASM(String("if_else_uid") + currentIfUID + "_end:");
@@ -970,7 +956,8 @@ namespace Scales
 
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_localCount", binf.getLocalCount());
 
-		//TODO: Check if we need to output a return here
+		writeASM("RETURN");
+		asmout << OP_RETURN;
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");

@@ -7,6 +7,7 @@
 
 #include "ScalesMemory.h"
 #include "ScalesUtil.h"
+#include "ScalesException.h"
 
 namespace Scales
 {
@@ -16,19 +17,19 @@ namespace Scales
 		switch(t.getBase())
 		{
 		case DataType::DTB_INT:
-			return SCALES_NEW IValueImpl<int32_t>();
+			return SCALES_NEW IValueImpl<int32_t>(0);
 
 		case DataType::DTB_LONG:
-			return SCALES_NEW IValueImpl<int64_t>();
+			return SCALES_NEW IValueImpl<int64_t>(0);
 
 		case DataType::DTB_FLOAT:
-			return SCALES_NEW IValueImpl<float>();
+			return SCALES_NEW IValueImpl<float>(0);
 
 		case DataType::DTB_DOUBLE:
-			return SCALES_NEW IValueImpl<double>();
+			return SCALES_NEW IValueImpl<double>(0);
 
 		case DataType::DTB_STRING:
-			return SCALES_NEW IValueImpl<String>();
+			return SCALES_NEW IValueImpl<String>("");
 
 		default:
 			return nullptr;
@@ -38,13 +39,10 @@ namespace Scales
 	}
 
 
+
 	IValue::~IValue()
 	{
-	}
 
-	template <typename T>
-	IValueImpl<T>::IValueImpl()
-	{
 	}
 
 	template <typename T>
@@ -59,6 +57,11 @@ namespace Scales
 		return data;
 	}
 
+	template <typename T>
+	IValue *IValueImpl<T>::copy()
+	{
+		return SCALES_NEW IValueImpl<T>(data);
+	}
 
 	/*IValueFactory::IValueFactory(const DataType &pType, IValue* (*pCreatorFunction)(void))
 	: type(pType),
@@ -95,18 +98,25 @@ namespace Scales
 
 	//provide specializations for every default Scales data type
 
-	SCALES_LINK_TYPE(int32_t, DataType::INT)
-	SCALES_LINK_TYPE(int64_t, DataType::LONG)
-	SCALES_LINK_TYPE(float, DataType::FLOAT)
-	SCALES_LINK_TYPE(double, DataType::DOUBLE)
-	SCALES_LINK_TYPE(String, DataType::STRING)
+	SCALES_BIND_TYPE(int32_t, DataType::INT)
+	SCALES_BIND_TYPE(int64_t, DataType::LONG)
+	SCALES_BIND_TYPE(float, DataType::FLOAT)
+	SCALES_BIND_TYPE(double, DataType::DOUBLE)
+	SCALES_BIND_TYPE(String, DataType::STRING)
 
+	//provide special specialization for the object data type
 
-	/*//provide special specialization for the object data type
 	template <>
-	DataType IValueImpl<ObjectPtr>::getType()
+	DataType IValueImpl<Object*>::getType()
 	{
+		if(data == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Access to non-null IValue pointing to null object. Most likely a bug.");
+		}
+
 		return DataType(DataType::DTB_OBJECT, data->getClass().getID());
-	}*/
+	}
+
+
 }
 

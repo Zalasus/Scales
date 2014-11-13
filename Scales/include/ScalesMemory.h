@@ -13,9 +13,9 @@
 #include "ScalesUtil.h"
 #include "ScalesType.h"
 
-//TODO: move dynamic type linking system into different branch
+//TODO: move dynamic type binding system into different branch
 
-#define SCALES_LINK_TYPE(cType, scalesType) \
+#define SCALES_BIND_TYPE(cType, scalesType) \
 	template <>\
 	DataType IValueImpl<cType>::getType()\
 	{\
@@ -37,6 +37,8 @@ namespace Scales
 	public:
 		virtual ~IValue();
 
+		virtual IValue *copy() = 0;
+
 		virtual DataType getType() = 0;
 
 		static IValue *getInstanceFromType(const DataType &t); //This replaces the not working factory based system
@@ -47,8 +49,9 @@ namespace Scales
 	{
 	public:
 
-		IValueImpl();
 		IValueImpl(T pData);
+
+		IValue *copy();
 
 		DataType getType();
 

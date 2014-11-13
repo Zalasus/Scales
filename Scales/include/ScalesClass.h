@@ -55,6 +55,7 @@ namespace Scales
 		String getNativeTarget() const;
 
 		progAdress_t getProgramSize() const;
+		const progUnit_t *getProgramArray() const;
 
 		progAdress_t getJoinedProgramSize() const;
 		const progUnit_t *getJoinedProgramArray() const;

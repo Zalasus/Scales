@@ -38,7 +38,9 @@ namespace Scales
 
 			ET_COMPILER,
 
-			ET_RUNTIME
+			ET_RUNTIME,
+
+			ET_NOT_IMPLEMENTED
 		};
 
 #ifdef _DEBUG

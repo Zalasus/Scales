@@ -57,58 +57,6 @@ class Math
 end
 
 
-namespace default;
-
-class byValueTest
-
-	private func void foo(int i)
-	
-		i = 10;
-	
-	end
-	
-	private func void fooByVal(int $i)
-	
-		i = 10;
-	
-	end
-	
-	private func void bar()
-	
-		int j = 5;
-		
-		foo(j);
-		# j is now 10
-		
-		j = 5;
-		
-		foo($j);
-		# j is still 5
-		
-		fooByVal(j);
-		#j is still 5
-		
-		begin
-			int a = 2;
-			int b = a;
-			
-			a = 5;
-			# both a and b are now 5
-		end
-		
-		begin
-			int a = 2;
-			int b = $a;
-			
-			a = 5;
-			#a is now 5, b is still 2
-		end
-	
-	end
-	
-
-end
-
 namespace NotTheSame;
 
 class Integer
