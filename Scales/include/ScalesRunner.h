@@ -15,21 +15,6 @@
 namespace Scales
 {
 
-	class LocalVal
-	{
-	public:
-
-		LocalVal(IValue *pVal);
-		~LocalVal();
-
-		IValue *getValue();
-
-	private:
-
-		IValue *val;
-
-	};
-
 	class Runner
 	{
 	public:
@@ -45,7 +30,7 @@ namespace Scales
 
 	private:
 
-		void functionCall(const String &name, uint32_t paramCount);
+		void functionCall(Object *target, const String &name, uint32_t paramCount);
 		void memberFunctionCall(const String &name, uint32_t paramCount);
 
 		void destroyLocals(uint32_t amount);

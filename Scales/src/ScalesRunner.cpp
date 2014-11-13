@@ -56,7 +56,7 @@ namespace Scales
 		while(pc < progSize)
 		{
 
-			progUnit_t op = prog[pc];
+			progUnit_t op = prog[pc++];
 
 			switch(op)
 			{
@@ -94,7 +94,7 @@ namespace Scales
 			case OP_CALL:
 				String funcName = readBString();
 				uint8_t paramCount = readUByte();
-				functionCall(funcName, paramCount);
+				functionCall(obj, funcName, paramCount);
 				break;
 
 			case OP_CALL_MEMBER:
@@ -104,8 +104,19 @@ namespace Scales
 				break;
 
 			case OP_CALL_STATIC:
+				String nspace = readBString();
+				String classname = readBString();
+				String funcName = readBString();
+				uint8_t paramCount = readUByte();
+				//TODO: Make static call here
+				break;
+
 
 			case OP_DISCARD:
+				SCALES_DELETE (aStack.back());
+				aStack.pop_back();
+				break;
+
 			case OP_DEREFER:
 			case OP_CLONE:
 			case OP_POPVAR:
@@ -157,17 +168,18 @@ namespace Scales
 
 	}
 
-	void Runner::functionCall(const String &name, uint32_t paramCount)
+	void Runner::functionCall(Object *target, const String &name, uint32_t paramCount)
 	{
 		ensureAStackSize(paramCount);
 
 		TypeList paramTypes;
 		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++)
 		{
+			//TODO: We need to check for null here. If a value is null, there is no way of determining which function to call, as we can't get it's type. We need to make a more dynamic lookup for the function, so we pick the first fitting function
 			paramTypes.push_back(aStack[i]->getType());
 		}
 
-		const Function *func = obj->getClass().getFunction(name, paramTypes);
+		const Function *func = target->getClass().getFunction(name, paramTypes);
 
 		if(func == nullptr)
 		{
@@ -181,12 +193,24 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_NOT_IMPLEMENTED, "Natives can't be called right now");
 		}
 
-		Runner r = Runner(obj, func);
+		Runner r = Runner(target, func);
 
 		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++) // Transfer parameters to aStack of new runner TODO: Implement this using iterators
 		{
-			r.getAStack().push_back(aStack[i]->copy());
+			IValue *v = aStack[i];
+
+			if(v != nullptr)
+			{
+				r.getAStack().push_back(v->copy());
+
+			}else
+			{
+				r.getAStack().push_back(nullptr);
+			}
+
+			SCALES_DELETE v;
 		}
+		aStack.erase(aStack.end() - paramCount, aStack.end());
 
 		r.run();
 
@@ -202,26 +226,38 @@ namespace Scales
 	{
 		ensureAStackSize(paramCount + 1); //ensure all parameters and the member object are there
 
-		IValue *v = *(aStack.back()-paramCount); //get the member object from stack
+		IValue *v = *(aStack.end()-paramCount-1); //get the member object from stack
 
-		//TODO: ensure value is not null before proceeding
+		if(v == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to call member in null value");
+		}
+
 		if(v->getType().getBase() != DataType::DTB_OBJECT)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Can't call member functions in non-object value");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to call member in non-object value");
 		}
 
 		IValueImpl<Object*> *ov = static_cast< IValueImpl<Object*> >(v); //TODO: A bit unsafe. Please check.
+		Object *o = ov->getData();
 
-		Object *o
+		//we don't want the containing object on stack anymore. it is safely stored above, so delete the stack element
+		SCALES_DELETE v;
+		aStack.erase(aStack.end()-paramCount-1); // ...and remove it
+
+		functionCall(o, name, paramCount);
 	}
 
 	void Runner::destroyLocals(uint32_t amount)
 	{
+		//TODO: Join loop and erase to one iterator
 
 		for(uint32_t i = lStack.size() - amount; i < lStack.size(); i++)
 		{
 			delete lStack[i];
 		}
+
+		lStack.erase(lStack.end() - amount, lStack.end());
 
 	}
 
