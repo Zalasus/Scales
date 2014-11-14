@@ -15,6 +15,9 @@
 namespace Scales
 {
 
+	class Object;
+	class IValue;
+
 	class Field : public AccessElement
 	{
 
@@ -26,6 +29,8 @@ namespace Scales
 		DataType getType() const;
 
 		uint32_t getIndex() const;
+
+		void assign(Object *obj, IValue *val) const;
 
 	private:
 

@@ -103,17 +103,19 @@ namespace Scales
 	{
 	public:
 
-		Local(const String &pName, const DataType &pType, const Scope &pScope);
+		Local(const String &pName, const DataType &pType, const Scope &pScope, uint32_t pIndex);
 
 		String getName() const;
 		DataType getType() const;
 		Scope getScope() const;
+		uint32_t getIndex() const;
 
 	private:
 
 		String name;
 		DataType type;
 		Scope scope;
+		uint32_t index;
 	};
 
 

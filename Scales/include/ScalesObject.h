@@ -17,16 +17,14 @@ namespace Scales
 
 	class Object
 	{
+		friend class Field;
+		friend class Function;
+
 	public:
 		Object(const Class &pMyClass);
 		~Object();
 
 		const Class &getClass() const;
-
-		IValue *getField(const Field &field);
-		IValue *getField(const String &name);
-
-		IValue *_getFieldByIndex(uint32_t i);
 
 	private:
 

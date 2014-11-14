@@ -14,6 +14,56 @@
 namespace Scales
 {
 
+	StackElement::StackElement(IValue *pValue, stackElementType_t pType)
+	: value(pValue),
+	  type(pType)
+	{
+	}
+
+	IValue *StackElement::getValue() const
+	{
+		return value;
+	}
+
+	StackElement::stackElementType_t StackElement::getType() const
+	{
+		return type;
+	}
+
+	StackElement StackElement::clone() const
+	{
+		if(type == SE_REFERENCE || value == nullptr)
+		{
+			return StackElement(value, SE_REFERENCE);
+
+		}else
+		{
+			return StackElement(value->copy(), SE_VALUE);
+		}
+	}
+
+	void StackElement::free()
+	{
+		if(type == SE_VALUE && value != nullptr)
+		{
+			SCALES_DELETE value;
+
+			value = nullptr;
+		}
+	}
+
+	IValue *StackElement::operator->()
+	{
+		if(value == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Invalid access of null stack value");
+
+		}else
+		{
+			return value;
+		}
+	}
+
 	Runner::Runner(Object *pObj, const Function *pFunc)
 	: obj(pObj),
 	  func(pFunc)
@@ -45,7 +95,7 @@ namespace Scales
 
 		for(auto iter = aStack.begin(); iter != aStack.end(); iter++)
 		{
-			SCALES_DELETE *iter;
+			(*iter).free();
 		}
 	}
 
@@ -113,19 +163,45 @@ namespace Scales
 
 
 			case OP_DISCARD:
-				SCALES_DELETE (aStack.back());
-				aStack.pop_back();
+				ensureAStackSize(1);
+				popAndFreeAStack();
 				break;
 
-			case OP_DEREFER:
 			case OP_CLONE:
-			case OP_POPVAR:
-			case OP_POPREF:
-			case OP_SOFTPOPREF:
-			case OP_PUSHREF:
-			case OP_PUSHREF_STATIC:
-			case OP_GETMEMBER:
-			case OP_GETINDEX:
+				ensureAStackSize(1);
+				aStack.push_back(aStack.back().clone());
+				break;
+
+			case OP_POP_VAR:
+				ensureAStackSize(1);
+				String fieldName = readBString();
+				const Field *f = obj->getClass().getField(fieldName);
+				if(f == nullptr)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Bad bytecode: Field not found");
+				}
+				f->assign(obj, aStack.back()->copy());
+				popAndFreeAStack();
+				break;
+
+			case OP_POP_REF:
+				ensureAStackSize(2);
+				StackElement value = aStack.back();
+				StackElement refer = aStack[aStack.size()-2];
+				if(refer.getType() != StackElement::SE_REFERENCE)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
+				}
+				//TODO: not sure if this whole ref system works. please continue here
+				popAndFreeAStack();
+				popAndFreeAStack();
+				break;
+
+			case OP_POP_REF_SOFT:
+			case OP_PUSH_REF:
+			case OP_PUSH_STATIC_REF:
+			case OP_GET_MEMBER:
+			case OP_GET_INDEX:
 
 			case OP_ADD:
 			case OP_SUBTRACT:
@@ -175,8 +251,16 @@ namespace Scales
 		TypeList paramTypes;
 		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++)
 		{
-			//TODO: We need to check for null here. If a value is null, there is no way of determining which function to call, as we can't get it's type. We need to make a more dynamic lookup for the function, so we pick the first fitting function
-			paramTypes.push_back(aStack[i]->getType());
+			if(aStack[i].getValue() == nullptr)
+			{
+				//a null instance is represented by a void type. TODO: we could replace this by a dedicated NULL type later
+				paramTypes.push_back(DataType::_VOID);
+
+			}else
+			{
+				//TODO: If a value is null, there is no way of determining which function to call, as we can't get it's type. We need to make a more dynamic lookup for the function, so we pick the first fitting function
+				paramTypes.push_back(aStack[i]->getType());
+			}
 		}
 
 		const Function *func = target->getClass().getFunction(name, paramTypes);
@@ -197,18 +281,17 @@ namespace Scales
 
 		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++) // Transfer parameters to aStack of new runner TODO: Implement this using iterators
 		{
-			IValue *v = aStack[i];
 
-			if(v != nullptr)
+			if(aStack[i].getValue() != nullptr)
 			{
-				r.getAStack().push_back(v->copy());
+				r.getAStack().push_back(StackElement(aStack[i]->copy(), StackElement::SE_VALUE));
 
 			}else
 			{
-				r.getAStack().push_back(nullptr);
+				r.getAStack().push_back(StackElement(nullptr, StackElement::SE_VALUE));
 			}
 
-			SCALES_DELETE v;
+			aStack[i].free();
 		}
 		aStack.erase(aStack.end() - paramCount, aStack.end());
 
@@ -218,7 +301,9 @@ namespace Scales
 		{
 			r.ensureAStackSize(1); //ensure there is a return value on the runner's stack
 
-			aStack.push_back(r.getAStack().back()->copy());
+			aStack.push_back(StackElement(r.getAStack().back()->copy(), StackElement::SE_VALUE));
+
+			//No need to delete element in secondary runner; it is deleted when Runner is destroyed
 		}
 	}
 
@@ -259,6 +344,12 @@ namespace Scales
 
 		lStack.erase(lStack.end() - amount, lStack.end());
 
+	}
+
+	void Runner::popAndFreeAStack()
+	{
+		aStack.back().free();
+		aStack.pop_back();
 	}
 
 }

@@ -700,7 +700,7 @@ namespace Scales
 
 		if(varFlags & VF_LOCAL)
 		{
-			locals.push_back(Local(ident.getLexem(), type, currentScope));
+			locals.push_back(Local(ident.getLexem(), type, currentScope, locals.size()));
 
 			// imperative declaration of local
 			writeASM("DECLARELOCAL '" + ident.getLexem() + "'," + (int)type.getBase());
@@ -716,7 +716,7 @@ namespace Scales
 			{
 				//This could actually mean there was a double declaration, but since we already checked for that, we call it a compiler bug
 
-				error("[COMPILER BUG] Uncatched null at field creation: " + ident.getLexem(), ident.getLine());
+				error("[COMPILER BUG] Uncatched null during field creation: " + ident.getLexem(), ident.getLine());
 			}
 
 			f->setStatic(varFlags & VF_STATIC);
@@ -746,7 +746,7 @@ namespace Scales
 			}
 
 			writeASM("POPVAR '" + ident.getLexem() + "'");
-			asmout << OP_POPVAR;
+			asmout << OP_POP_VAR;
 
 		}else if(!t.is(Token::TT_OPERATOR, ";"))
 		{
@@ -805,8 +805,7 @@ namespace Scales
 
 				t = name();
 
-				//Rather than creating a new vector just for the byVals, we insert the dollar into the varname for later evaluation
-				paramNames.push_back(byVal ? ("$" + t.getLexem()) : t.getLexem());
+				paramNames.push_back(t.getLexem());
 
 				t = lexer.readToken();
 
@@ -923,16 +922,8 @@ namespace Scales
 		{
 			String paraName = paramNames[i];
 
-			bool byVal = StringUtils::startsWith(paraName, "$");
-			if(byVal)
-			{
-				//In the code above we inserted a dollar in front of all byValue parameters. Here we remove it
-
-				paraName = StringUtils::substring(paraName, 1, paraName.length());
-			}
-
 			//Declare local
-			locals.push_back(Local(paraName, paramTypes[i], scopeOfFuncBlock));
+			locals.push_back(Local(paraName, paramTypes[i], scopeOfFuncBlock, locals.size()));
 
 			writeASM("DECLARELOCAL '" + paraName + "'," + (uint32_t)paramTypes[i].getBase());
 			asmout << OP_DECLARELOCAL;
@@ -940,15 +931,9 @@ namespace Scales
 			writeDatatypeToBytecode(paramTypes[i]);
 
 			//Get the local from stack
-			if(byVal)
-			{
-				writeASM("DEREFER");
-
-				asmout << OP_DEREFER;
-			}
 
 			writeASM("POPVAR '" + paraName + "'");
-			asmout << OP_POPVAR;
+			asmout << OP_POP_VAR;
 			asmout.writeBString(paraName);
 		}
 
@@ -1221,12 +1206,12 @@ namespace Scales
 			if(valueContext)
 			{
 				writeASM("SOFTPOPREF"); //Pops to reference and leaves the assigned value on the stack
-				asmout << OP_SOFTPOPREF;
+				asmout << OP_POP_REF_SOFT;
 
 			}else
 			{
 				writeASM("POPREF"); // this eliminates the need for a DISCARD in a non-value context, as nothing stays on the stack after assignment here
-				asmout << OP_POPREF;
+				asmout << OP_POP_REF;
 			}
 
 			//No need to check whether the right hand is void or not, since the right hand is the left hand of another expression, and as such a check is
@@ -1505,7 +1490,6 @@ namespace Scales
 	{
 		bool negate = false;
 		bool invert = false;
-		bool toVal = false;
 
 		Token t = lexer.peekToken();
 		if(t.is(Token::TT_OPERATOR,"-"))
@@ -1518,17 +1502,13 @@ namespace Scales
 			invert = true;
 			lexer.readToken();
 
-		}else if(t.is(Token::TT_OPERATOR,"$"))
-		{
-			toVal = true;
-			lexer.readToken();
 		}
 
 		ExpressionInfo info = memberFactor(expressionScope);
 
-		if(info.getFactorType() == ExpressionInfo::FT_VOID && (negate || invert || toVal))
+		if(info.getFactorType() == ExpressionInfo::FT_VOID && (negate || invert))
 		{
-			error("Unary inversion/negation/deref not possible with void type expression", t.getLine());
+			error("Unary inversion/negation not possible with void type expression", t.getLine());
 		}
 
 		if(negate)
@@ -1553,14 +1533,6 @@ namespace Scales
 			asmout << OP_INVERT;
 
 			info = ExpressionInfo(DataType(DataType::DTB_INT), info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
-		}
-
-		if(toVal)
-		{
-			writeASM("DEREFER");
-			asmout << OP_DEREFER;
-
-			info = ExpressionInfo(info.getType(), info.isConstant(), ExpressionInfo::FT_MATH_EXPR); //TODO: I have a bad feeling about this. Maybe re-think if all the values are correct
 		}
 
 		return info;
@@ -1624,7 +1596,7 @@ namespace Scales
                 info = ExpressionInfo(f->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
 
                 writeASM("GETMEMBER '" + member.getLexem() + "'");
-                asmout << OP_GETMEMBER;
+                asmout << OP_GET_MEMBER;
                 asmout.writeBString(member.getLexem());
             }
         }
@@ -1658,7 +1630,7 @@ namespace Scales
 			}
 
 			writeASM("GETINDEX");
-			asmout << OP_GETINDEX;
+			asmout << OP_GET_INDEX;
 
 			t = lexer.readToken();
 			if(!t.is(Token::TT_OPERATOR, "]"))
@@ -1798,7 +1770,8 @@ namespace Scales
 							error("Can not access non-static field " + targetClassID.toString() + ":" + thirdIdent.getLexem() + " in static context", thirdIdent.getLine());
 						}
 
-						asmout << OP_PUSHREF_STATIC;
+						writeASM("PUSHSTATICREF");
+						asmout << OP_PUSH_STATIC_REF;
 						asmout.writeBString(t.getLexem());
 						asmout.writeBString(secondIdent.getLexem());
 						asmout.writeBString(thirdIdent.getLexem());
@@ -1850,26 +1823,34 @@ namespace Scales
             	const Field *f = currentClass->getJoinedField(t.getLexem());
 				if(f != nullptr)
 				{
-					//We found the field! We've already got it's name, so only extract it's type.
+					//We found the field in global scope! We've already got it's name, so only extract it's type.
 					fieldType = f->getType();
+
+					writeASM("PUSHREF '" + t.getLexem() + "'");
+					asmout << OP_PUSH_REF;
+					asmout.writeBString(t.getLexem());
 
 				}else
 				{
 					//Field was not found in global scope. Check for local scope.
 
 					Local *l = lookupLocal(t.getLexem(), expressionScope);
-					if(l != nullptr) //Also not found in local scope. That's an error
+					if(l != nullptr)
 					{
+						//there it is. since locals are not accessed by name during runtime, we need to get it's ordinal and push it accordingly
+
 						fieldType = l->getType();
+
+						writeASM(String("PUSHLOCALREF ") + l->getIndex());
+						asmout << OP_PUSH_LOCAL_REF;
+						asmout.writeUInt(l->getIndex());
+
 					}else
 					{
+						//Also not found in local scope. That's an error
 						error("Variable/type '" + t.getLexem() + "' was not declared in this scope", t.getLine());
 					}
 				}
-
-                writeASM("PUSHREF '" + t.getLexem() + "'");
-                asmout << OP_PUSHREF;
-                asmout.writeBString(t.getLexem());
 
                 return ExpressionInfo(fieldType, false, ExpressionInfo::FT_VARIABLE_REF);
             }
@@ -2501,10 +2482,11 @@ namespace Scales
 	const Scope Scope::GLOBAL(0,0,0);
 
 
-	Local::Local(const String &pName, const DataType &pType, const Scope &pScope)
+	Local::Local(const String &pName, const DataType &pType, const Scope &pScope, uint32_t pIndex)
 	 : name(pName),
 	   type(pType),
-	   scope(pScope)
+	   scope(pScope),
+	   index(pIndex)
 	{
 	}
 
@@ -2521,5 +2503,10 @@ namespace Scales
 	Scope Local::getScope() const
 	{
 		return scope;
+	}
+
+	uint32_t Local::getIndex() const
+	{
+		return index;
 	}
 }

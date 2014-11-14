@@ -7,6 +7,11 @@
 
 #include "ScalesField.h"
 
+#include "ScalesObject.h"
+#include "ScalesMemory.h"
+#include "ScalesUtil.h"
+#include "ScalesException.h"
+
 namespace Scales
 {
 
@@ -30,6 +35,42 @@ namespace Scales
 	uint32_t Field::getIndex() const
 	{
 		return index;
+	}
+
+	void Field::assign(Object *obj, IValue *val) const
+	{
+		//FIXME: Very unsafe. We don't check if this field really is a member of the given object etc.
+
+		if(obj == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to field in null object");
+		}
+
+		IValue *oldVal = obj->fields[index];
+
+		if(oldVal != nullptr)
+		{
+			SCALES_DELETE oldVal;
+		}
+
+		if(val == nullptr)
+		{
+			if(type.getBase() != DataType::DTB_OBJECT)
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign null to non-object type");
+			}
+
+			obj->fields[index] = val;
+
+		}else
+		{
+			if(!(val->getType() == type.getBase())) //still too lazy to implement the != operator
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Type mismatch in assignment");
+			}
+		}
+
+		obj->fields[index] = val;
 	}
 
 }

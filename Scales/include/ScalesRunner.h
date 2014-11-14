@@ -15,8 +15,43 @@
 namespace Scales
 {
 
+	class StackElement
+	{
+	public:
+
+		enum stackElementType_t
+		{
+			SE_VALUE,
+			SE_REFERENCE
+		};
+
+		StackElement(IValue *pValue, stackElementType_t pType);
+
+		IValue *getValue() const;
+		stackElementType_t getType() const;
+
+		IValue *operator->();
+
+		/**
+		 * Returns a new instance of StackElement, containing a copied value if the contained value
+		 * of this element is a value, and the same pointer if the contained value is a reference.
+		 */
+		StackElement clone() const;
+
+		void free();
+
+	private:
+
+		IValue *value;
+		stackElementType_t type;
+
+	};
+
 	class Runner
 	{
+		typedef std::vector<StackElement> AStackType;
+		typedef std::vector<IValue*> LStackType;
+
 	public:
 
 		Runner(Object *pObj, const Function *pFunc);
@@ -26,7 +61,7 @@ namespace Scales
 
 	protected:
 		void ensureAStackSize(uint32_t size);
-		std::vector<IValue*> &getAStack();
+		AStackType &getAStack();
 
 	private:
 
@@ -34,7 +69,7 @@ namespace Scales
 		void memberFunctionCall(const String &name, uint32_t paramCount);
 
 		void destroyLocals(uint32_t amount);
-
+		inline void popAndFreeAStack();
 
 		uint8_t readUByte();
 		uint32_t readUInt();
@@ -50,8 +85,8 @@ namespace Scales
 		progAdress_t progSize;
 		progAdress_t pc;
 
-		std::vector<IValue*> aStack;
-		std::vector<IValue*> lStack;
+		AStackType aStack;
+		LStackType lStack;
 
 	};
 
