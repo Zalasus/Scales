@@ -19,6 +19,7 @@ namespace Scales
 	{
 		friend class Field;
 		friend class Function;
+		friend class Runner;
 
 	public:
 		Object(const Class &pMyClass);

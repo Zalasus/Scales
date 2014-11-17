@@ -14,37 +14,57 @@
 namespace Scales
 {
 
-	StackElement::StackElement(IValue *pValue, stackElementType_t pType)
-	: value(pValue),
-	  type(pType)
+	StackElement::StackElement(IValue *pValue)
+	: value(pValue)
 	{
 	}
 
 	IValue *StackElement::getValue() const
 	{
-		return value;
-	}
-
-	StackElement::stackElementType_t StackElement::getType() const
-	{
-		return type;
-	}
-
-	StackElement StackElement::clone() const
-	{
-		if(type == SE_REFERENCE || value == nullptr)
+		if(value == nullptr)
 		{
-			return StackElement(value, SE_REFERENCE);
+			return nullptr;
 
 		}else
 		{
-			return StackElement(value->copy(), SE_VALUE);
+			if(value->isReference())
+			{
+				return *((static_cast<IValueRef*>(value))->getReference());
+
+			}else
+			{
+				return value;
+			}
+		}
+	}
+
+	bool StackElement::isReference()
+	{
+		if(value == nullptr)
+		{
+			return false; //references should never be null
+
+		}else
+		{
+			return value->isReference();
+		}
+	}
+
+	StackElement StackElement::clone()
+	{
+		if(value == nullptr)
+		{
+			return StackElement(value->copy());
+
+		}else
+		{
+			return StackElement(nullptr);
 		}
 	}
 
 	void StackElement::free()
 	{
-		if(type == SE_VALUE && value != nullptr)
+		if(value != nullptr)
 		{
 			SCALES_DELETE value;
 
@@ -66,7 +86,10 @@ namespace Scales
 
 	Runner::Runner(Object *pObj, const Function *pFunc)
 	: obj(pObj),
-	  func(pFunc)
+	  func(pFunc),
+	  lStack(nullptr),
+	  lStackSize(0),
+	  lStackTop(0)
 	{
 		prog = obj->getClass().getProgramArray();
 		progSize = obj->getClass().getProgramSize();
@@ -88,9 +111,9 @@ namespace Scales
 
 	Runner::~Runner()
 	{
-		for(auto iter = lStack.begin(); iter != lStack.end(); iter++)
+		for(uint32_t i = 0; i < lStackSize; i++)
 		{
-			SCALES_DELETE *iter;
+			SCALES_DELETE lStack[i];
 		}
 
 		for(auto iter = aStack.begin(); iter != aStack.end(); iter++)
@@ -111,6 +134,13 @@ namespace Scales
 			switch(op)
 			{
 			case OP_JUMP_IF_FALSE:
+				uint32_t adr = readUInt();
+				if(!checkCondition())
+				{
+					pc = adr;
+				}
+				break;
+
 			case OP_JUMP:
 				pc = readUInt();
 				break;
@@ -126,7 +156,7 @@ namespace Scales
 
 			case OP_BEGIN:
 				uint32_t blockLocalCount = readUInt();
-				lStack.reserve(lStack.capacity() + blockLocalCount);
+				//This operation does nothing at the moment
 				break;
 
 			case OP_END:
@@ -137,7 +167,7 @@ namespace Scales
 			case OP_DECLARELOCAL:
 				String varname = readBString();
 				DataType vartype = readDataType();
-				lStack.push_back(IValue::getInstanceFromType(vartype));
+				getLStackElement(lStackTop++) = IValue::getInstanceFromType(vartype);
 				break;
 
 
@@ -164,7 +194,8 @@ namespace Scales
 
 			case OP_DISCARD:
 				ensureAStackSize(1);
-				popAndFreeAStack();
+				aStack.back().free();
+				aStack.pop_back();
 				break;
 
 			case OP_CLONE:
@@ -174,30 +205,51 @@ namespace Scales
 
 			case OP_POP_VAR:
 				ensureAStackSize(1);
-				String fieldName = readBString();
-				const Field *f = obj->getClass().getField(fieldName);
-				if(f == nullptr)
+				uint32_t globalIndex = readUInt();
+				if(aStack.back().isReference())
 				{
-					SCALES_EXCEPT(Exception::ET_RUNTIME, "Bad bytecode: Field not found");
+					//TODO: type checking? although the compiler does that, and it's not fatal if type mismatches occur during runtime, we should check that (natives aren't checked by compiler for instance)
+					obj->fields[globalIndex] = aStack.back().getValue()->copy();
+
+					popAndFreeAStack();
+
+				}else
+				{
+					obj->fields[globalIndex] = aStack.back().getValue();
+
+					aStack.pop_back();
 				}
-				f->assign(obj, aStack.back()->copy());
-				popAndFreeAStack();
+				break;
+
+			case OP_POP_LOCAL_VAR:
+				ensureAStackSize(1);
+				uint32_t localIndex = readUInt();
+				IValue *oldVal = getLStackElement(localIndex);
+				if(aStack.back().isReference())
+				{
+					getLStackElement(localIndex) = aStack.back().getValue()->copy(); //A referenced value always needs to be copied. Otherwise variables could be re-linked to the same value
+
+					popAndFreeAStack();
+
+				}else
+				{
+					getLStackElement(localIndex) = aStack.back().getRaw(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
+
+					aStack.pop_back(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
+				}
+
+				SCALES_DELETE oldVal;
+
 				break;
 
 			case OP_POP_REF:
-				ensureAStackSize(2);
-				StackElement value = aStack.back();
-				StackElement refer = aStack[aStack.size()-2];
-				if(refer.getType() != StackElement::SE_REFERENCE)
-				{
-					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
-				}
-				//TODO: not sure if this whole ref system works. please continue here
-				popAndFreeAStack();
-				popAndFreeAStack();
+				popRef(false);
 				break;
 
 			case OP_POP_REF_SOFT:
+				popRef(true);
+				break;
+
 			case OP_PUSH_REF:
 			case OP_PUSH_STATIC_REF:
 			case OP_GET_MEMBER:
@@ -282,14 +334,7 @@ namespace Scales
 		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++) // Transfer parameters to aStack of new runner TODO: Implement this using iterators
 		{
 
-			if(aStack[i].getValue() != nullptr)
-			{
-				r.getAStack().push_back(StackElement(aStack[i]->copy(), StackElement::SE_VALUE));
-
-			}else
-			{
-				r.getAStack().push_back(StackElement(nullptr, StackElement::SE_VALUE));
-			}
+			r.getAStack().push_back(aStack[i].clone());
 
 			aStack[i].free();
 		}
@@ -301,7 +346,7 @@ namespace Scales
 		{
 			r.ensureAStackSize(1); //ensure there is a return value on the runner's stack
 
-			aStack.push_back(StackElement(r.getAStack().back()->copy(), StackElement::SE_VALUE));
+			aStack.push_back(r.getAStack().back().clone());
 
 			//No need to delete element in secondary runner; it is deleted when Runner is destroyed
 		}
@@ -311,7 +356,7 @@ namespace Scales
 	{
 		ensureAStackSize(paramCount + 1); //ensure all parameters and the member object are there
 
-		IValue *v = *(aStack.end()-paramCount-1); //get the member object from stack
+		IValue *v = (aStack.end()-paramCount-1)->getValue(); //get the member object from stack
 
 		if(v == nullptr)
 		{
@@ -333,17 +378,64 @@ namespace Scales
 		functionCall(o, name, paramCount);
 	}
 
+	//TODO: This function may not be working. check it when uncommenting
+	/*
 	void Runner::destroyLocals(uint32_t amount)
 	{
-		//TODO: Join loop and erase to one iterator
 
-		for(uint32_t i = lStack.size() - amount; i < lStack.size(); i++)
+
+		for(uint32_t i = 0; i < amount; i++)
 		{
-			delete lStack[i];
+			if((lStackTop < lStackSize) && (lStackTop > 0))
+			{
+				lStackTop--;
+
+				SCALES_DELETE lStack[lStackTop];
+				lStack[lStackTop] = nullptr;
+			}
 		}
 
-		lStack.erase(lStack.end() - amount, lStack.end());
+	}*/
 
+	IValue *&Runner::getLStackElement(uint32_t i)
+	{
+		if(i >= lStackTop)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
+		}
+
+		return lStack[i];
+	}
+
+	void Runner::popRef(bool soft)
+	{
+		ensureAStackSize(2);
+		StackElement value = aStack.back();
+		StackElement refer = aStack[aStack.size()-2];
+		if(!refer.isReference())
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
+		}
+
+		IValue **irefer = (static_cast<IValueRef*>(refer.getRaw()))->getReference();
+
+		if(value.isReference())
+		{
+			(*irefer) = value.getValue()->copy();
+
+			popAndFreeAStack();
+
+		}else
+		{
+			(*irefer) = value.getRaw();
+
+			aStack.pop_back();
+		}
+
+		if(!soft) //TODO: according to specs, we need to keep the value. here, we delete the reference. need to review the specs
+		{
+			popAndFreeAStack();
+		}
 	}
 
 	void Runner::popAndFreeAStack()

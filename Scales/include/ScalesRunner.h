@@ -19,31 +19,32 @@ namespace Scales
 	{
 	public:
 
-		enum stackElementType_t
-		{
-			SE_VALUE,
-			SE_REFERENCE
-		};
-
-		StackElement(IValue *pValue, stackElementType_t pType);
-
-		IValue *getValue() const;
-		stackElementType_t getType() const;
-
-		IValue *operator->();
+		StackElement(IValue *pValue);
 
 		/**
-		 * Returns a new instance of StackElement, containing a copied value if the contained value
-		 * of this element is a value, and the same pointer if the contained value is a reference.
+		 * Returns the value of the stack element. Dereferences the value if it is a reference.
 		 */
-		StackElement clone() const;
+		IValue *getValue() const;
+
+		/**
+		 * Returns the value of the stack element. Does not dereference references.
+		 */
+		IValue *getRaw() const;
+
+		/**
+		 * Returns a new StackElement with a copied IValue or nullptr, if this Element's value is also null
+		 */
+		StackElement clone();
+
+		bool isReference();
+
+		IValue *operator->();
 
 		void free();
 
 	private:
 
 		IValue *value;
-		stackElementType_t type;
 
 	};
 
@@ -68,8 +69,14 @@ namespace Scales
 		void functionCall(Object *target, const String &name, uint32_t paramCount);
 		void memberFunctionCall(const String &name, uint32_t paramCount);
 
+		void popRef(bool soft);
+
+		void popAndFreeAStack();
+		IValue *&getLStackElement(uint32_t i);
+
+		bool checkCondition();
+
 		void destroyLocals(uint32_t amount);
-		inline void popAndFreeAStack();
 
 		uint8_t readUByte();
 		uint32_t readUInt();
@@ -86,7 +93,10 @@ namespace Scales
 		progAdress_t pc;
 
 		AStackType aStack;
-		LStackType lStack;
+
+		IValue **lStack;
+		uint32_t lStackSize;
+		uint32_t lStackTop;
 
 	};
 

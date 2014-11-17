@@ -63,6 +63,90 @@ namespace Scales
 		return SCALES_NEW IValueImpl<T>(data);
 	}
 
+	template <typename T>
+	bool IValueImpl<T>::isReference()
+	{
+		return false;
+	}
+
+
+
+	IValueRef::IValueRef(IValue **pRef)
+	: ref(pRef)
+	{
+		if(pRef == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to create nullreference");
+		}
+
+		if((*pRef) == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to reference nullvalue");
+		}
+
+		if((*pRef)->isReference())
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cascade references");
+		}
+	}
+
+	IValue *IValueRef::copy()
+	{
+		if(ref == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
+
+		}else
+		{
+
+			if(*ref == nullptr)
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			}
+
+			return (*ref)->copy();
+		}
+	}
+
+	DataType IValueRef::getType()
+	{
+		if(ref == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
+
+		}else
+		{
+			if(*ref == nullptr)
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			}
+
+			return (*ref)->getType();
+		}
+	}
+
+	bool IValueRef::isReference()
+	{
+		return true;
+	}
+
+	IValue **IValueRef::getReference()
+	{
+		if(ref == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
+
+		}else
+		{
+			if(*ref == nullptr)
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			}
+
+			return ref;
+		}
+	}
+
 	/*IValueFactory::IValueFactory(const DataType &pType, IValue* (*pCreatorFunction)(void))
 	: type(pType),
 	  creatorFunction(pCreatorFunction)

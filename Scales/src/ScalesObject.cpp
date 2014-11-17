@@ -63,33 +63,6 @@ namespace Scales
 		SCALES_DELETE[] fields;
 	}
 
-	IValue *Object::getField(const Field &field)
-	{
-		return _getFieldByIndex(field.getIndex());
-	}
-
-	IValue *Object::getField(const String &name)
-	{
-		const Field *f = myClass.getField(name);
-
-		if(f == nullptr)
-		{
-			return nullptr;
-		}
-
-		return getField(*f);
-	}
-
-	IValue *Object::_getFieldByIndex(uint32_t i)
-	{
-		if(i < 0 || i > storedFieldCount)
-		{
-			return nullptr;
-		}
-
-		return fields[i];
-	}
-
 }
 
 

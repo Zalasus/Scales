@@ -40,6 +40,7 @@ namespace Scales
 		virtual IValue *copy() = 0;
 
 		virtual DataType getType() = 0;
+		virtual bool isReference() = 0;
 
 		static IValue *getInstanceFromType(const DataType &t); //This replaces the not working factory based system
 	};
@@ -51,9 +52,13 @@ namespace Scales
 
 		IValueImpl(T pData);
 
+		/**
+		 * Allocates memory and creates a new value with same type and data and returns it.
+		 */
 		IValue *copy();
 
 		DataType getType();
+		bool isReference();
 
 		T &getData();
 
@@ -62,6 +67,26 @@ namespace Scales
 		T data;
 	};
 
+	class IValueRef : public IValue
+	{
+	public:
+
+			IValueRef(IValue **pRef);
+
+			/**
+			 * Calls the copy method of the referenced value, thus dereferencing it.
+			 */
+			IValue *copy();
+
+			DataType getType();
+			bool isReference();
+
+			IValue **getReference();
+
+		private:
+
+			IValue **ref;
+	};
 
 	/*class IValueFactory
 	{

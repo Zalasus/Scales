@@ -35,6 +35,7 @@ namespace Scales
 		OP_DISCARD,
 		OP_CLONE,
 		OP_POP_VAR,
+		OP_POP_LOCAL_VAR,
 		OP_POP_REF,
 		OP_POP_REF_SOFT,
 		OP_PUSH_REF,
