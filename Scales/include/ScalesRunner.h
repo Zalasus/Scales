@@ -15,6 +15,8 @@
 namespace Scales
 {
 
+	class Root;
+
 	class StackElement
 	{
 	public:
@@ -55,7 +57,7 @@ namespace Scales
 
 	public:
 
-		Runner(Object *pObj, const Function *pFunc);
+		Runner(Object *pObj, Root *pRoot, const Function *pFunc);
 		~Runner();
 
 		void run();
@@ -81,12 +83,18 @@ namespace Scales
 		uint8_t readUByte();
 		uint32_t readUInt();
 
+		int32_t readInt();
+		int64_t readLong();
+		float readFloat();
+		double readDouble();
+
 		String readBString();
 		String readIString();
 
 		DataType readDataType();
 
 		Object *obj;
+		Root *root;
 		const Function *func;
 		progUnit_t *prog;
 		progAdress_t progSize;

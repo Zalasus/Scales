@@ -27,6 +27,8 @@ namespace Scales
 
 		const Class &getClass() const;
 
+		IValue *&getFieldByIndex(uint32_t i);
+
 	private:
 
 		const Class &myClass;

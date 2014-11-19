@@ -63,7 +63,7 @@ namespace Scales
 		return c;
 	}
 
-	const Class *Root::getClass(const ClassID &classId)
+	const Class *Root::getClass(const ClassID &classId) const
 	{
 		for(uint32_t i = 0; i < classes.size(); i++)
 		{
@@ -78,11 +78,11 @@ namespace Scales
 		return nullptr;
 	}
 
-	const std::vector<const Class*> Root::listClasses()
+	const std::vector<const Class*> Root::listClasses() const
 	{
 		//TODO: Check if there is better way of making the vector elements const than shoving them into another vector
 
-		std::vector<const Class*> newList;
+		std::vector<const Class*> newList = std::vector<const Class*>(classes.size()); //preallocate all the space we need
 
 		for(uint32_t i = 0; i < classes.size(); i++)
 		{
@@ -92,7 +92,7 @@ namespace Scales
 		return newList;
 	}
 
-	const std::vector<const Class*> Root::listClassesInNamespace(const String &s)
+	const std::vector<const Class*> Root::listClassesInNamespace(const String &s) const
 	{
 
 		//TODO: Check if there is better way of making the vector elements const than shoving them into another vector

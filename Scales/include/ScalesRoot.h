@@ -34,10 +34,10 @@ namespace Scales
 		Compiler *getCompiler(compilerFlags_t compilerFlags);
 
 		Class *createClass(const ClassID &classId, const Class *pSuperclass = nullptr);
-		const Class *getClass(const ClassID &classId);
+		const Class *getClass(const ClassID &classId) const;
 
-		const std::vector<const Class*> listClasses();
-		const std::vector<const Class*> listClassesInNamespace(const String &nspace);
+		const std::vector<const Class*> listClasses() const;
+		const std::vector<const Class*> listClassesInNamespace(const String &nspace) const;
 
 		/**
 		 * Creates a new object. Attention: Once the program looses track of the returned pointer, there is no way
@@ -48,7 +48,7 @@ namespace Scales
 		Object *createObject(const ClassID &classId);
 
 		Thread *createThread();
-		Thread *getThread(threadID_t tid);
+		Thread *getThread(threadID_t tid) const;
 
 	private:
 

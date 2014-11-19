@@ -10,6 +10,7 @@
 
 #include "ScalesException.h"
 #include "ScalesUtil.h"
+#include "ScalesRoot.h"
 
 namespace Scales
 {
@@ -23,7 +24,7 @@ namespace Scales
 	{
 		if(value == nullptr)
 		{
-			return nullptr;
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Invalid access of null stack value");
 
 		}else
 		{
@@ -36,6 +37,11 @@ namespace Scales
 				return value;
 			}
 		}
+	}
+
+	IValue *StackElement::getRaw() const
+	{
+		return value;
 	}
 
 	bool StackElement::isReference()
@@ -74,23 +80,22 @@ namespace Scales
 
 	IValue *StackElement::operator->()
 	{
-		if(value == nullptr)
-		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Invalid access of null stack value");
-
-		}else
-		{
-			return value;
-		}
+		return getValue();
 	}
 
-	Runner::Runner(Object *pObj, const Function *pFunc)
+	Runner::Runner(Object *pObj, Root *pRoot, const Function *pFunc)
 	: obj(pObj),
+	  root(pRoot),
 	  func(pFunc),
 	  lStack(nullptr),
 	  lStackSize(0),
 	  lStackTop(0)
 	{
+		if(obj == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to run on null objects");
+		}
+
 		prog = obj->getClass().getProgramArray();
 		progSize = obj->getClass().getProgramSize();
 
@@ -98,7 +103,7 @@ namespace Scales
 		{
 			if(func->isNative())
 			{
-				SCALES_EXCEPT(Exception::ET_RUNTIME, "Can't run natives using bytecode runner");
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to run natives using bytecode runner");
 			}
 
 			pc = func->getAdress();
@@ -206,36 +211,43 @@ namespace Scales
 			case OP_POP_VAR:
 				ensureAStackSize(1);
 				uint32_t globalIndex = readUInt();
+				IValue *oldValue = obj->fields[globalIndex]; //store old value, we need to delete it after the assignment
+
 				if(aStack.back().isReference())
 				{
 					//TODO: type checking? although the compiler does that, and it's not fatal if type mismatches occur during runtime, we should check that (natives aren't checked by compiler for instance)
-					obj->fields[globalIndex] = aStack.back().getValue()->copy();
+
+					obj->getFieldByIndex(globalIndex) = aStack.back().getValue()->copy(); //A referenced value always needs to be copied. Otherwise variables could be re-linked to the same value
 
 					popAndFreeAStack();
 
 				}else
 				{
-					obj->fields[globalIndex] = aStack.back().getValue();
+					obj->getFieldByIndex(globalIndex) = aStack.back().getValue(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
 
-					aStack.pop_back();
+					aStack.pop_back(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
 				}
+
+				SCALES_DELETE oldValue;
+
 				break;
 
 			case OP_POP_LOCAL_VAR:
 				ensureAStackSize(1);
 				uint32_t localIndex = readUInt();
 				IValue *oldVal = getLStackElement(localIndex);
+
 				if(aStack.back().isReference())
 				{
-					getLStackElement(localIndex) = aStack.back().getValue()->copy(); //A referenced value always needs to be copied. Otherwise variables could be re-linked to the same value
+					getLStackElement(localIndex) = aStack.back().getValue()->copy();
 
 					popAndFreeAStack();
 
 				}else
 				{
-					getLStackElement(localIndex) = aStack.back().getRaw(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
+					getLStackElement(localIndex) = aStack.back().getRaw();
 
-					aStack.pop_back(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
+					aStack.pop_back();
 				}
 
 				SCALES_DELETE oldVal;
@@ -251,9 +263,48 @@ namespace Scales
 				break;
 
 			case OP_PUSH_REF:
+				uint32_t globalIndex = readUInt();
+				aStack.push_back( SCALES_NEW IValueRef(&(obj->getFieldByIndex(globalIndex))) );
+				break;
+
+			case OP_PUSH_LOCAL_REF:
+				uint32_t localIndex = readUInt();
+				aStack.push_back( SCALES_NEW IValueRef(&(getLStackElement(localIndex))) );
+				break;
+
 			case OP_PUSH_STATIC_REF:
+				//static refs currently unsupported. just read names and push null value
+				readBString();
+				readBString();
+				readBString();
+				aStack.push_back(StackElement(nullptr));
+				break;
+
 			case OP_GET_MEMBER:
+				ensureAStackSize(1);
+				uint32_t memberIndex = readUInt();
+				StackElement obj = aStack.back();
+				if(obj->getType().getBase() != DataType::DTB_OBJECT)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of non-object type");
+				}
+				IValueImpl<Object*> *iobj = static_cast< IValueImpl<Object*> >(obj.getValue());
+				obj.free();
+				aStack.pop_back();
+				if(iobj->getData() == nullptr)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of null object");
+				}
+				IValue **mref = iobj->getData();
+				aStack.push_back(StackElement(SCALES_NEW IValueRef(mref)));
+
+				break;
+
 			case OP_GET_INDEX:
+				ensureAStackSize(1);
+				uint32_t index = readUInt();
+				//TODO: further implement array/string access
+				break;
 
 			case OP_ADD:
 			case OP_SUBTRACT:
@@ -270,20 +321,63 @@ namespace Scales
 			case OP_GREATER_EQUAL:
 
 			case OP_TO_OBJECT_INSTANCE:
+				ensureAStackSize(1);
+				if(aStack.back()->getType().getBase() != DataType::DTB_ABSTRACT_OBJECT)
+				{
+
+				}
+				break;
+
 			case OP_TO_INT:
 			case OP_TO_LONG:
 			case OP_TO_FLOAT:
 			case OP_TO_DOUBLE:
 
 			case OP_PUSH_INT:
+				int32_t i = readInt();
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<int32_t>(i)));
+				break;
+
 			case OP_PUSH_LONG:
+				int64_t l = readLong();
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<int64_t>(l)));
+				break;
+
 			case OP_PUSH_FLOAT:
+				float f = readFloat();
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<float>(f)));
+				break;
+
 			case OP_PUSH_DOUBLE:
+				double d = readDouble();
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<double>(d)));
+				break;
+
 			case OP_PUSH_STRING:
+				String s = readIString();
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<String>(s)));
+				break;
+
 			case OP_PUSH_NULL:
+				aStack.push_back(StackElement(nullptr));
+				break;
+
 			case OP_PUSH_THIS:
-			case OP_PUSH_PARENT:
+			case OP_PUSH_PARENT: //TODO: make parent work as expected
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<Object*>(obj)));
+				break;
+
 			case OP_NEW:
+				String nspace = readBString();
+				String classname = readBString();
+				const Class *cl = root->getClass(ClassID(nspace, classname));
+				if(cl == nullptr)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to instantiate non-existent class");
+				}
+				Object *o = root->createObject(*cl);
+				aStack.push_back(StackElement(SCALES_NEW IValueImpl<Object*>(o)));
+				break;
 
 			}
 
@@ -417,7 +511,10 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
 		}
 
-		IValue **irefer = (static_cast<IValueRef*>(refer.getRaw()))->getReference();
+		//TODO: We need to check if source is a reference to the target, and cancel the old-value-deletion if so
+
+		IValue **irefer = (static_cast<IValueRef*>(refer.getRaw()))->getReference(); //we could include this reference-getter in StackElement
+		IValue *oldValue = refer.getValue();
 
 		if(value.isReference())
 		{
@@ -431,6 +528,8 @@ namespace Scales
 
 			aStack.pop_back();
 		}
+
+		SCALES_DELETE oldValue;
 
 		if(!soft) //TODO: according to specs, we need to keep the value. here, we delete the reference. need to review the specs
 		{
