@@ -68,6 +68,10 @@ namespace Scales
 
 	private:
 
+		StackElement aStackPop();
+		StackElement aStackBack();
+		void aStackPush(StackElement e);
+
 		void functionCall(Object *target, const String &name, uint32_t paramCount);
 		void memberFunctionCall(const String &name, uint32_t paramCount);
 
@@ -100,7 +104,9 @@ namespace Scales
 		progAdress_t progSize;
 		progAdress_t pc;
 
-		AStackType aStack;
+		StackElement *aStack;
+		uint32_t aStackSize;
+		uint32_t aStackTop;
 
 		IValue **lStack;
 		uint32_t lStackSize;

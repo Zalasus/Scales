@@ -89,15 +89,15 @@ namespace Scales
 	  func(pFunc),
 	  lStack(nullptr),
 	  lStackSize(0),
-	  lStackTop(0)
+	  lStackTop(0),
+	  aStack(nullptr),
+	  aStackSize(0),
+	  aStackTop(0)
 	{
 		if(obj == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to run on null objects");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to run on null object");
 		}
-
-		prog = obj->getClass().getProgramArray();
-		progSize = obj->getClass().getProgramSize();
 
 		if(func != nullptr)
 		{
@@ -110,8 +110,11 @@ namespace Scales
 
 		}else
 		{
-			pc = 0;
+			pc = 0; //if no function is given, we want to run the global scope program
 		}
+
+		prog = obj->getClass().getProgramArray();
+		progSize = obj->getClass().getProgramSize();
 	}
 
 	Runner::~Runner()
@@ -121,10 +124,15 @@ namespace Scales
 			SCALES_DELETE lStack[i];
 		}
 
-		for(auto iter = aStack.begin(); iter != aStack.end(); iter++)
+		SCALES_DELETE[] lStack;
+
+
+		for(uint32_t i = 0; i < aStackSize; i++)
 		{
-			(*iter).free();
+			aStack[i].free();
 		}
+
+		SCALES_DELETE[] aStack;
 	}
 
 	void Runner::run()
@@ -199,13 +207,12 @@ namespace Scales
 
 			case OP_DISCARD:
 				ensureAStackSize(1);
-				aStack.back().free();
-				aStack.pop_back();
+				aStackPop().free();
 				break;
 
 			case OP_CLONE:
 				ensureAStackSize(1);
-				aStack.push_back(aStack.back().clone());
+				aStackPush(aStackBack().clone());
 				break;
 
 			case OP_POP_VAR:
