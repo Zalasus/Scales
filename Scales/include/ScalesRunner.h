@@ -33,28 +33,27 @@ namespace Scales
 		 */
 		IValue *getRaw() const;
 
-		/**
-		 * Returns a new StackElement with a copied IValue or nullptr, if this Element's value is also null
-		 */
-		StackElement clone();
-
 		bool isReference();
 
+		/**
+		 * Shorthand for .getValue()->
+		 */
 		IValue *operator->();
 
+		/**
+		 * Frees the memory pointed by this stack element. The element becomes invalid after this operation.
+		 * Any access to functions of element after calling free() results in undefined behaviour.
+		 */
 		void free();
 
 	private:
 
-		IValue *value;
+		IValue * const value;
 
 	};
 
 	class Runner
 	{
-		typedef std::vector<StackElement> AStackType;
-		typedef std::vector<IValue*> LStackType;
-
 	public:
 
 		Runner(Object *pObj, Root *pRoot, const Function *pFunc);
@@ -64,37 +63,34 @@ namespace Scales
 
 	protected:
 		void ensureAStackSize(uint32_t size);
-		AStackType &getAStack();
+		StackElement aStackPop();
+		StackElement aStackPeek();
+		void aStackPush(StackElement e);
 
 	private:
 
-		StackElement aStackPop();
-		StackElement aStackBack();
-		void aStackPush(StackElement e);
-
-		void functionCall(Object *target, const String &name, uint32_t paramCount);
-		void memberFunctionCall(const String &name, uint32_t paramCount);
+		IValue *functionCall(Object *target, const String &name, uint32_t paramCount);
+		IValue *memberFunctionCall(const String &name, uint32_t paramCount);
 
 		void popRef(bool soft);
 
-		void popAndFreeAStack();
 		IValue *&getLStackElement(uint32_t i);
 
 		bool checkCondition();
 
 		void destroyLocals(uint32_t amount);
 
+		template <typename T>
+		IValue *numericCast(IValue *v);
+
 		uint8_t readUByte();
 		uint32_t readUInt();
-
 		int32_t readInt();
 		int64_t readLong();
 		float readFloat();
 		double readDouble();
-
 		String readBString();
 		String readIString();
-
 		DataType readDataType();
 
 		Object *obj;

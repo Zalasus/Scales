@@ -12,66 +12,37 @@
 namespace Scales
 {
 
-	IValue *IValue::getInstanceFromType(const DataType &t)
-	{
-		switch(t.getBase())
-		{
-		case DataType::DTB_INT:
-			return SCALES_NEW IValueImpl<int32_t>(0);
-
-		case DataType::DTB_LONG:
-			return SCALES_NEW IValueImpl<int64_t>(0);
-
-		case DataType::DTB_FLOAT:
-			return SCALES_NEW IValueImpl<float>(0);
-
-		case DataType::DTB_DOUBLE:
-			return SCALES_NEW IValueImpl<double>(0);
-
-		case DataType::DTB_STRING:
-			return SCALES_NEW IValueImpl<String>("");
-
-		default:
-			return nullptr;
-		}
-
-		return nullptr;
-	}
-
-
-
 	IValue::~IValue()
 	{
 
 	}
 
 	template <typename T>
-	IValueImpl<T>::IValueImpl(T pData)
+	ValuePrimitive<T>::ValuePrimitive(T pData)
 	: data(pData)
 	{
 	}
 
 	template <typename T>
-	T &IValueImpl<T>::getData()
+	T &ValuePrimitive<T>::getData()
 	{
 		return data;
 	}
 
 	template <typename T>
-	IValue *IValueImpl<T>::copy()
+	IValue::value_type_t ValuePrimitive<T>::getValueType()
 	{
-		return SCALES_NEW IValueImpl<T>(data);
+		return VT_PRIMITVE;
 	}
 
 	template <typename T>
-	bool IValueImpl<T>::isReference()
+	IValue *ValuePrimitive<T>::copy()
 	{
-		return false;
+		return SCALES_NEW ValuePrimitive<T>(data);
 	}
 
 
-
-	IValueRef::IValueRef(IValue **pRef)
+	ValueRef::ValueRef(IValue **pRef)
 	: ref(pRef)
 	{
 		if(pRef == nullptr)
@@ -84,123 +55,138 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to reference nullvalue");
 		}
 
-		if((*pRef)->isReference())
+		if((*pRef)->getValueType() == VT_REFERENCE)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cascade references");
 		}
 	}
 
-	IValue *IValueRef::copy()
+	IValue *ValueRef::copy()
 	{
-		if(ref == nullptr)
+		if(*ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
-
-		}else
-		{
-
-			if(*ref == nullptr)
-			{
-				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
-			}
-
-			return (*ref)->copy();
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
 		}
+
+		return (*ref)->copy();
 	}
 
-	DataType IValueRef::getType()
+	DataType ValueRef::getDataType()
 	{
-		if(ref == nullptr)
+		if(*ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
-
-		}else
-		{
-			if(*ref == nullptr)
-			{
-				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
-			}
-
-			return (*ref)->getType();
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
 		}
+
+		return (*ref)->getDataType();
 	}
 
-	bool IValueRef::isReference()
+	IValue::value_type_t ValueRef::getValueType()
 	{
-		return true;
+		return VT_REFERENCE;
 	}
 
-	IValue **IValueRef::getReference()
+	IValue **ValueRef::getReference()
 	{
-		if(ref == nullptr)
+		if(*ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
-
-		}else
-		{
-			if(*ref == nullptr)
-			{
-				SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
-			}
-
-			return ref;
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
 		}
+
+		return ref;
 	}
 
-	/*IValueFactory::IValueFactory(const DataType &pType, IValue* (*pCreatorFunction)(void))
-	: type(pType),
-	  creatorFunction(pCreatorFunction)
+	IValue *IValue::getNewPrimitiveFromType(const DataType &t)
 	{
-		factories.push_back(this);
-	}
-
-	DataType IValueFactory::getType() const
-	{
-		return type;
-	}
-
-	IValue *IValueFactory::create() const
-	{
-		return creatorFunction();
-	}
-
-	const IValueFactory *IValueFactory::getFactoryForType(const DataType &pType)
-	{
-		for(auto iter = factories.begin(); iter != factories.end(); iter++)
+		switch(t.getBase())
 		{
-			if((*iter)->getType() == pType)
-			{
-				return *iter;
-			}
+		case DataType::DTB_INT:
+			return SCALES_NEW ValuePrimitive<int32_t>(0);
+
+		case DataType::DTB_LONG:
+			return SCALES_NEW ValuePrimitive<int64_t>(0);
+
+		case DataType::DTB_FLOAT:
+			return SCALES_NEW ValuePrimitive<float>(0);
+
+		case DataType::DTB_DOUBLE:
+			return SCALES_NEW ValuePrimitive<double>(0);
+
+		case DataType::DTB_STRING:
+			return SCALES_NEW ValuePrimitive<String>("");
+
+		default:
+
 		}
 
 		return nullptr;
 	}
 
-	std::vector<IValueFactory*> IValueFactory::factories;*/
 
 
-	//provide specializations for every default Scales data type
 
-	SCALES_BIND_TYPE(int32_t, DataType::INT)
-	SCALES_BIND_TYPE(int64_t, DataType::LONG)
-	SCALES_BIND_TYPE(float, DataType::FLOAT)
-	SCALES_BIND_TYPE(double, DataType::DOUBLE)
-	SCALES_BIND_TYPE(String, DataType::STRING)
-
-	//provide special specialization for the object data type
-
-	template <>
-	DataType IValueImpl<Object*>::getType()
+	ValueObject::ValueObject(Object *pObj, const Class *pMask)
+	 : obj(pObj),
+	   mask(pMask)
 	{
-		if(data == nullptr)
+		if(obj == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Access to non-null IValue pointing to null object. Most likely a bug.");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to create null-object");
 		}
-
-		return DataType(DataType::DTB_OBJECT, data->getClass().getID());
 	}
 
+	IValue *ValueObject::copy()
+	{
+		return SCALES_NEW ValueObject(obj, mask);
+	}
+
+	IValue::value_type_t ValueObject::getValueType()
+	{
+		return VT_OBJECT;
+	}
+
+	DataType ValueObject::getDataType()
+	{
+		return DataType(mask == nullptr ? DataType::DTB_ABSTRACT_OBJECT : DataType::DTB_OBJECT, mask);
+	}
+
+	DataType ValueObject::getAbsoluteDataType()
+	{
+		return DataType(DataType::DTB_OBJECT, obj->getClass());
+	}
+
+	Object *ValueObject::getObject()
+	{
+		return obj;
+	}
+
+
+	ValueNull::ValueNull()
+	{
+	}
+
+	IValue *ValueNull::copy()
+	{
+		return SCALES_NEW ValueNull();
+	}
+
+	DataType ValueNull::getDataType()
+	{
+		return DataType::_VOID; //TODO: change to dedicated null type
+	}
+
+	IValue::value_type_t ValueNull::getValueType()
+	{
+		return VT_NULL;
+	}
+
+	//provide specializations for every primitive Scales data type
+
+	SCALES_BIND_TYPE(primitive_int_t, DataType::INT)
+	SCALES_BIND_TYPE(primitive_long_t, DataType::LONG)
+	SCALES_BIND_TYPE(primitive_float_t, DataType::FLOAT)
+	SCALES_BIND_TYPE(primitive_double_t, DataType::DOUBLE)
+	SCALES_BIND_TYPE(primitive_string_t, DataType::STRING)
 
 }
 

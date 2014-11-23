@@ -996,7 +996,7 @@ namespace Scales
 				error("Only non-abstract object types have callable member functions, but given type was: " + baseType.toString(), t.getLine());
 			}
 
-			const Class *fieldClass = lookupClass(baseType.getClassID());
+			const Class *fieldClass = lookupClass(baseType.getTypeClass()->getID());
 
 			if(fieldClass == nullptr)
 			{
@@ -1469,10 +1469,10 @@ namespace Scales
 
 			if(type == DataType::DTB_OBJECT)
 			{
-				writeASM(String("TOOBJECTINSTANCE '") + type.getClassID().getNamespace() + "','" + type.getClassID().getClassname() + "'");
-				asmout << OP_TO_OBJECT_INSTANCE;
-				asmout.writeBString(type.getClassID().getNamespace());
-				asmout.writeBString(type.getClassID().getClassname());
+				writeASM(String("TOOBJECT '") + type.getTypeClass()->getID().getNamespace() + "','" + type.getTypeClass()->getID().getClassname() + "'");
+				asmout << OP_TO_OBJECT;
+				asmout.writeBString(type.getTypeClass()->getID().getNamespace());
+				asmout.writeBString(type.getTypeClass()->getID().getClassname());
 
 			}else
 			{
@@ -1573,7 +1573,7 @@ namespace Scales
 
             }else
             {
-            	const Class *s = lookupClass(info.getType().getClassID());
+            	const Class *s = lookupClass(info.getType().getTypeClass()->getID());
 				if(s == nullptr)
 				{
 					error("Given object type has non-existent class '" + info.getType().toString() + "'", member.getLine());
@@ -2126,8 +2126,8 @@ namespace Scales
 
     	if(t == DataType::DTB_OBJECT)
     	{
-    		asmout.writeBString(t.getClassID().getNamespace());
-    		asmout.writeBString(t.getClassID().getClassname());
+    		asmout.writeBString(t.getTypeClass()->getID().getNamespace());
+    		asmout.writeBString(t.getTypeClass()->getID().getClassname());
     	}
     }
 
@@ -2305,87 +2305,87 @@ namespace Scales
 	
     const String DefaultCompiler::KEYWORDS[] =
 	{
-			"namespace",
-			"default",
-			"begin",
-			"end",
-			"public",
-			"private",
-			"func",
-			"native",
-			"void",
-			"class",
-			"static",
-			"binds",
-			"extends",
-			"using",
-			"return",
-			"do",
-			"while",
-			"for",
-			"if",
-			"elseif",
-			"else",
-			"break",
-			"null",
-			"this",
-			"parent",
-			"goto",
-			"new",
-			"init",
-			"true",
-			"false",
+		"namespace",
+		"default",
+		"begin",
+		"end",
+		"public",
+		"private",
+		"func",
+		"native",
+		"void",
+		"class",
+		"static",
+		"binds",
+		"extends",
+		"using",
+		"return",
+		"do",
+		"while",
+		"for",
+		"if",
+		"elseif",
+		"else",
+		"break",
+		"null",
+		"this",
+		"parent",
+		"goto",
+		"new",
+		"init",
+		"true",
+		"false",
 
-			"int",
-			"long",
-			"float",
-			"double",
-			"string",
-			"object"
+		"int",
+		"long",
+		"float",
+		"double",
+		"string",
+		"object"
 	};
 	const uint32_t DefaultCompiler::KEYWORD_COUNT = sizeof(KEYWORDS)/sizeof(String);
 
 	const String DefaultCompiler::DATATYPES[] =
 	{
-			"int",
-			"long",
-			"float",
-			"double",
-			"string",
-			"object"
+		"int",
+		"long",
+		"float",
+		"double",
+		"string",
+		"object"
 	};
 	const uint32_t DefaultCompiler::DATATYPE_COUNT = sizeof(DATATYPES)/sizeof(String);
 
 	const String DefaultCompiler::OPERATORS[] =
 	{
-			"+",
-			"-",
-			"*",
-			"/",
-			"=",
-			"+=",
-			"-=",
-			"*=",
-			"/=",
-			"(",
-			")",
-			"[",
-			"]",
-			"->",
-			"<",
-			">",
-			"<=",
-			">=",
-			"!=",
-			"==",
-			"&",
-			"|",
-			"!",
-			".",
-			",",
-			";",
-			":",
-			"$"
+		"+",
+		"-",
+		"*",
+		"/",
+		"=",
+		"+=",
+		"-=",
+		"*=",
+		"/=",
+		"(",
+		")",
+		"[",
+		"]",
+		"->",
+		"<",
+		">",
+		"<=",
+		">=",
+		"!=",
+		"==",
+		"&",
+		"|",
+		"!",
+		".",
+		",",
+		";",
+		":",
+		"$"
 	};
 	const uint32_t DefaultCompiler::OPERATOR_COUNT = sizeof(OPERATORS)/sizeof(String);
 

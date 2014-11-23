@@ -18,24 +18,21 @@ namespace Scales
 	StackElement::StackElement(IValue *pValue)
 	: value(pValue)
 	{
+		if(pValue == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to push pure null value on stack");
+		}
 	}
 
 	IValue *StackElement::getValue() const
 	{
-		if(value == nullptr)
+		if(value->getValueType() == IValue::VT_REFERENCE)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Invalid access of null stack value");
+			return *((static_cast<ValueRef*>(value))->getReference());
 
 		}else
 		{
-			if(value->isReference())
-			{
-				return *((static_cast<IValueRef*>(value))->getReference());
-
-			}else
-			{
-				return value;
-			}
+			return value;
 		}
 	}
 
@@ -46,41 +43,17 @@ namespace Scales
 
 	bool StackElement::isReference()
 	{
-		if(value == nullptr)
-		{
-			return false; //references should never be null
-
-		}else
-		{
-			return value->isReference();
-		}
-	}
-
-	StackElement StackElement::clone()
-	{
-		if(value == nullptr)
-		{
-			return StackElement(value->copy());
-
-		}else
-		{
-			return StackElement(nullptr);
-		}
-	}
-
-	void StackElement::free()
-	{
-		if(value != nullptr)
-		{
-			SCALES_DELETE value;
-
-			value = nullptr;
-		}
+		return value->getValueType() == IValue::VT_REFERENCE;
 	}
 
 	IValue *StackElement::operator->()
 	{
 		return getValue();
+	}
+
+	void StackElement::free()
+	{
+		SCALES_DELETE value;
 	}
 
 	Runner::Runner(Object *pObj, Root *pRoot, const Function *pFunc)
@@ -113,8 +86,8 @@ namespace Scales
 			pc = 0; //if no function is given, we want to run the global scope program
 		}
 
-		prog = obj->getClass().getProgramArray();
-		progSize = obj->getClass().getProgramSize();
+		prog = obj->getClass()->getProgramArray();
+		progSize = obj->getClass()->getProgramSize();
 	}
 
 	Runner::~Runner()
@@ -180,7 +153,7 @@ namespace Scales
 			case OP_DECLARELOCAL:
 				String varname = readBString();
 				DataType vartype = readDataType();
-				getLStackElement(lStackTop++) = IValue::getInstanceFromType(vartype);
+				getLStackElement(lStackTop++) = IValue::getNewPrimitiveFromType(vartype);
 				break;
 
 
@@ -212,7 +185,7 @@ namespace Scales
 
 			case OP_CLONE:
 				ensureAStackSize(1);
-				aStackPush(aStackBack().clone());
+				aStackPush(aStackPeek()->copy());
 				break;
 
 			case OP_POP_VAR:
@@ -220,19 +193,19 @@ namespace Scales
 				uint32_t globalIndex = readUInt();
 				IValue *oldValue = obj->fields[globalIndex]; //store old value, we need to delete it after the assignment
 
-				if(aStack.back().isReference())
+				if(aStackPeek().isReference())
 				{
 					//TODO: type checking? although the compiler does that, and it's not fatal if type mismatches occur during runtime, we should check that (natives aren't checked by compiler for instance)
 
-					obj->getFieldByIndex(globalIndex) = aStack.back().getValue()->copy(); //A referenced value always needs to be copied. Otherwise variables could be re-linked to the same value
+					obj->getFieldByIndex(globalIndex) = aStackPeek().getValue()->copy(); //A referenced value always needs to be copied. Otherwise variables could be re-linked to the same value
 
-					popAndFreeAStack();
+					aStackPop().free();
 
 				}else
 				{
-					obj->getFieldByIndex(globalIndex) = aStack.back().getValue(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
+					obj->getFieldByIndex(globalIndex) = aStackPeek().getValue(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
 
-					aStack.pop_back(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
+					aStackPop(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
 				}
 
 				SCALES_DELETE oldValue;
@@ -244,17 +217,17 @@ namespace Scales
 				uint32_t localIndex = readUInt();
 				IValue *oldVal = getLStackElement(localIndex);
 
-				if(aStack.back().isReference())
+				if(aStackPeek().isReference())
 				{
-					getLStackElement(localIndex) = aStack.back().getValue()->copy();
+					getLStackElement(localIndex) = aStackPeek().getValue()->copy();
 
-					popAndFreeAStack();
+					aStackPop().free();
 
 				}else
 				{
-					getLStackElement(localIndex) = aStack.back().getRaw();
+					getLStackElement(localIndex) = aStackPeek().getRaw();
 
-					aStack.pop_back();
+					aStackPop();
 				}
 
 				SCALES_DELETE oldVal;
@@ -271,12 +244,12 @@ namespace Scales
 
 			case OP_PUSH_REF:
 				uint32_t globalIndex = readUInt();
-				aStack.push_back( SCALES_NEW IValueRef(&(obj->getFieldByIndex(globalIndex))) );
+				aStackPush(StackElement(SCALES_NEW ValueRef(&(obj->getFieldByIndex(globalIndex))))); //TODO: Look at all these parentheses! Wonderful, isn't it? Like back in my LISP-days...
 				break;
 
 			case OP_PUSH_LOCAL_REF:
 				uint32_t localIndex = readUInt();
-				aStack.push_back( SCALES_NEW IValueRef(&(getLStackElement(localIndex))) );
+				aStackPush(StackElement(SCALES_NEW ValueRef(&(getLStackElement(localIndex)))));
 				break;
 
 			case OP_PUSH_STATIC_REF:
@@ -284,27 +257,20 @@ namespace Scales
 				readBString();
 				readBString();
 				readBString();
-				aStack.push_back(StackElement(nullptr));
+				aStackPush(StackElement(nullptr));
 				break;
 
 			case OP_GET_MEMBER:
 				ensureAStackSize(1);
 				uint32_t memberIndex = readUInt();
-				StackElement obj = aStack.back();
-				if(obj->getType().getBase() != DataType::DTB_OBJECT)
+				if(aStackPeek()->getValueType() != IValue::VT_OBJECT)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of non-object type");
 				}
-				IValueImpl<Object*> *iobj = static_cast< IValueImpl<Object*> >(obj.getValue());
-				obj.free();
-				aStack.pop_back();
-				if(iobj->getData() == nullptr)
-				{
-					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of null object");
-				}
-				IValue **mref = iobj->getData();
-				aStack.push_back(StackElement(SCALES_NEW IValueRef(mref)));
-
+				ValueObject *iobj = static_cast<ValueObject*>(aStackPeek().getValue());
+				IValue **mref = &(iobj->getObject()->fields[memberIndex]);
+				aStackPop().free();
+				aStackPush(StackElement(SCALES_NEW ValueRef(mref)));
 				break;
 
 			case OP_GET_INDEX:
@@ -327,65 +293,126 @@ namespace Scales
 			case OP_LESS_EQUAL:
 			case OP_GREATER_EQUAL:
 
-			case OP_TO_OBJECT_INSTANCE:
+			case OP_TO_OBJECT:
+			{
 				ensureAStackSize(1);
-				if(aStack.back()->getType().getBase() != DataType::DTB_ABSTRACT_OBJECT)
+				String nspace = readBString();
+				String classname = readBString();
+				const Class *cl = root->getClass(ClassID(nspace, classname));
+				if(cl == nullptr)
 				{
-
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast to non-existent class");
 				}
+				if(aStackPeek()->getValueType() != DataType::DTB_OBJECT)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast non-object to object");
+				}
+				Object *iobj = static_cast<ValueObject*>(aStackPeek().getValue())->getObject();
+				aStackPop().free();
+				if(!(iobj->getClass()->is(cl) || iobj->getClass()->isSubclassOf(cl)))
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast object to incompatible type");
+				}
+				aStackPush(StackElement(SCALES_NEW ValueObject(iobj, cl)));
 				break;
+			}
+
+			case OP_TO_ABSTRACT_OBJECT:
+			{
+				ensureAStackSize(1);
+				if(aStackPeek()->getValueType() != DataType::DTB_OBJECT)
+				{
+					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast non-object to abstract object");
+				}
+				Object *iobj = static_cast<ValueObject*>(aStackPeek().getValue())->getObject();
+				aStackPop().free();
+				aStackPush(StackElement(SCALES_NEW ValueObject(iobj, nullptr)));
+				break;
+			}
+
 
 			case OP_TO_INT:
+				ensureAStackSize(1);
+				IValue *val = aStackPeek().getValue();
+				IValue *castedVal = numericCast<primitive_int_t>(val);
+				aStackPop().free();
+				aStackPush(StackElement(castedVal));
+				break;
+
 			case OP_TO_LONG:
+				ensureAStackSize(1);
+				IValue *val = aStackPeek().getValue();
+				IValue *castedVal = numericCast<primitive_long_t>(val);
+				aStackPop().free();
+				aStackPush(StackElement(castedVal));
+				break;
+
 			case OP_TO_FLOAT:
+				ensureAStackSize(1);
+				IValue *val = aStackPeek().getValue();
+				IValue *castedVal = numericCast<primitive_float_t>(val);
+				aStackPop().free();
+				aStackPush(StackElement(castedVal));
+				break;
+
 			case OP_TO_DOUBLE:
+				ensureAStackSize(1);
+				IValue *val = aStackPeek().getValue();
+				IValue *castedVal = numericCast<primitive_double_t>(val);
+				aStackPop().free();
+				aStackPush(StackElement(castedVal));
+				break;
+
 
 			case OP_PUSH_INT:
 				int32_t i = readInt();
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<int32_t>(i)));
+				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int32_t>(i)));
 				break;
 
 			case OP_PUSH_LONG:
 				int64_t l = readLong();
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<int64_t>(l)));
+				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int64_t>(l)));
 				break;
 
 			case OP_PUSH_FLOAT:
 				float f = readFloat();
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<float>(f)));
+				aStackPush(StackElement(SCALES_NEW ValuePrimitive<float>(f)));
 				break;
 
 			case OP_PUSH_DOUBLE:
 				double d = readDouble();
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<double>(d)));
+				aStackPush(StackElement(SCALES_NEW ValuePrimitive<double>(d)));
 				break;
 
 			case OP_PUSH_STRING:
 				String s = readIString();
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<String>(s)));
+				aStackPush(StackElement(SCALES_NEW ValuePrimitive<String>(s)));
 				break;
 
 			case OP_PUSH_NULL:
-				aStack.push_back(StackElement(nullptr));
+				aStackPush(StackElement(nullptr));
 				break;
 
 			case OP_PUSH_THIS:
 			case OP_PUSH_PARENT: //TODO: make parent work as expected
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<Object*>(obj)));
+				aStackPush(StackElement(SCALES_NEW ValueObject(obj)));
 				break;
 
 			case OP_NEW:
+				{
 				String nspace = readBString();
 				String classname = readBString();
+				uint32_t paramCount = readUInt();
 				const Class *cl = root->getClass(ClassID(nspace, classname));
 				if(cl == nullptr)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to instantiate non-existent class");
 				}
 				Object *o = root->createObject(*cl);
-				aStack.push_back(StackElement(SCALES_NEW IValueImpl<Object*>(o)));
+				//TODO: call constructor here
+				aStackPush(StackElement(SCALES_NEW ValueObject(o)));
 				break;
-
+				}
 			}
 
 			if(finished)
@@ -397,26 +424,19 @@ namespace Scales
 
 	}
 
-	void Runner::functionCall(Object *target, const String &name, uint32_t paramCount)
+	IValue *Runner::functionCall(Object *target, const String &name, uint32_t paramCount)
 	{
 		ensureAStackSize(paramCount);
 
 		TypeList paramTypes;
-		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++)
+		//extract type parameters from stack
+		for(uint32_t i = (aStackTop - paramCount); i < aStackTop; i++)
 		{
-			if(aStack[i].getValue() == nullptr)
-			{
-				//a null instance is represented by a void type. TODO: we could replace this by a dedicated NULL type later
-				paramTypes.push_back(DataType::_VOID);
-
-			}else
-			{
-				//TODO: If a value is null, there is no way of determining which function to call, as we can't get it's type. We need to make a more dynamic lookup for the function, so we pick the first fitting function
-				paramTypes.push_back(aStack[i]->getType());
-			}
+			//TODO: If a value is null, there is no way of determining which function to call, as we can't get it's type. We need to make a more dynamic lookup for the function, so we pick the first fitting function
+			paramTypes.push_back(aStack[i]->getDataType()); //for a null value this returns a void type
 		}
 
-		const Function *func = target->getClass().getFunction(name, paramTypes);
+		const Function *func = target->getClass()->getFunction(name, paramTypes);
 
 		if(func == nullptr)
 		{
@@ -432,51 +452,46 @@ namespace Scales
 
 		Runner r = Runner(target, func);
 
-		for(uint32_t i = (aStack.size() - 1); i > (aStack.size() - paramCount); i++) // Transfer parameters to aStack of new runner TODO: Implement this using iterators
+		//Transfer parameters to aStack of new runner
+		for(uint32_t i = 0; i < paramCount; i++)
 		{
+			r.aStackPush(aStackPeek()->copy());
 
-			r.getAStack().push_back(aStack[i].clone());
-
-			aStack[i].free();
+			aStackPop().free();
 		}
-		aStack.erase(aStack.end() - paramCount, aStack.end());
 
 		r.run();
 
-		if(func->getReturnType().getBase() != DataType::DTB_VOID) //If func is non-void, transfer the return value back to our aStack
+		if(func->getReturnType().getBase() != DataType::DTB_VOID) //If func is non-void, copy and return the return value
 		{
 			r.ensureAStackSize(1); //ensure there is a return value on the runner's stack
 
-			aStack.push_back(r.getAStack().back().clone());
+			return r.aStackPeek()->copy(); //return a copy of the value, so it can be pushed afterwards
 
 			//No need to delete element in secondary runner; it is deleted when Runner is destroyed
 		}
+
+		return nullptr; //no return -> tell caller by returning null
 	}
 
-	void Runner::memberFunctionCall(const String &name, uint32_t paramCount)
+	IValue *Runner::memberFunctionCall(const String &name, uint32_t paramCount)
 	{
 		ensureAStackSize(paramCount + 1); //ensure all parameters and the member object are there
 
-		IValue *v = (aStack.end()-paramCount-1)->getValue(); //get the member object from stack
+		StackElement element = (aStack[aStackTop - paramCount - 1]); //get the member object from stack
 
-		if(v == nullptr)
-		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to call member in null value");
-		}
-
-		if(v->getType().getBase() != DataType::DTB_OBJECT)
+		if(element->getValueType() != IValue::VT_OBJECT)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to call member in non-object value");
 		}
 
-		IValueImpl<Object*> *ov = static_cast< IValueImpl<Object*> >(v); //TODO: A bit unsafe. Please check.
-		Object *o = ov->getData();
+		ValueObject *ov = static_cast<ValueObject>(element.getValue());
+		Object *o = ov->getObject();
+		IValue *ret = functionCall(o, name, paramCount);
 
-		//we don't want the containing object on stack anymore. it is safely stored above, so delete the stack element
-		SCALES_DELETE v;
-		aStack.erase(aStack.end()-paramCount-1); // ...and remove it
+		aStackPop().free(); // pop the member object and free it
 
-		functionCall(o, name, paramCount);
+		return ret;
 	}
 
 	//TODO: This function may not be working. check it when uncommenting
@@ -511,8 +526,8 @@ namespace Scales
 	void Runner::popRef(bool soft)
 	{
 		ensureAStackSize(2);
-		StackElement value = aStack.back();
-		StackElement refer = aStack[aStack.size()-2];
+		StackElement value = aStackPop();
+		StackElement refer = aStackPop();
 		if(!refer.isReference())
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
@@ -520,35 +535,109 @@ namespace Scales
 
 		//TODO: We need to check if source is a reference to the target, and cancel the old-value-deletion if so
 
-		IValue **irefer = (static_cast<IValueRef*>(refer.getRaw()))->getReference(); //we could include this reference-getter in StackElement
+		IValue **irefer = (static_cast<ValueRef*>(refer.getRaw()))->getReference(); //we could include this reference-getter in StackElement
 		IValue *oldValue = refer.getValue();
 
 		if(value.isReference())
 		{
 			(*irefer) = value.getValue()->copy();
 
-			popAndFreeAStack();
+			value.free(); //references always need to be deleted
 
 		}else
 		{
 			(*irefer) = value.getRaw();
 
-			aStack.pop_back();
+			//no need to pop/free, as value is re-linked
 		}
 
 		SCALES_DELETE oldValue;
 
-		if(!soft) //TODO: according to specs, we need to keep the value. here, we delete the reference. need to review the specs
+		if(!soft)
 		{
-			popAndFreeAStack();
+			refer.free();
+
+		}else //TODO: according to specs, we need to keep the value. here, we keep the reference. need to review the specs
+		{
+			aStackPush(refer);
 		}
 	}
 
-	void Runner::popAndFreeAStack()
+	bool Runner::checkCondition()
 	{
-		aStack.back().free();
-		aStack.pop_back();
+		IValue *iv = aStackPeek().getValue();
+
+		if(iv->getValueType() != IValue::VT_PRIMITVE || iv->getDataType().isNumeric())
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to evaluate condition with non-numeric type");
+		}
+
+		if(iv->getDataType() == DataType::DTB_INT)
+		{
+			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t> >(iv);
+
+			return piv->getData() != 0;
+
+		}else if(iv->getDataType() == DataType::DTB_LONG)
+		{
+			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t> >(iv);
+
+			return piv->getData() != 0;
+
+		}else if(iv->getDataType() == DataType::DTB_FLOAT)
+		{
+			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t> >(iv);
+
+			return piv->getData() != 0;
+
+		}else if(iv->getDataType() == DataType::DTB_DOUBLE)
+		{
+			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t> >(iv);
+
+			return piv->getData() != 0;
+		}
+
+		aStackPop().free();
+
+		return false; //should never happen
 	}
 
+	template <typename T>
+	IValue *Runner::numericCast(IValue *v)
+	{
+		if(v->getValueType() != IValue::VT_PRIMITVE || !v->getDataType().isNumeric())
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast non-numerical to numerical value");
+		}
+
+		T newData = 0;
+
+		if(v->getDataType() == DataType::DTB_INT)
+		{
+			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t> >(v);
+
+			newData = static_cast<T>(piv->getData());
+
+		}else if(v->getDataType() == DataType::DTB_LONG)
+		{
+			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t> >(v);
+
+			newData = static_cast<T>(piv->getData());
+
+		}else if(v->getDataType() == DataType::DTB_FLOAT)
+		{
+			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t> >(v);
+
+			newData = static_cast<T>(piv->getData());
+
+		}else if(v->getDataType() == DataType::DTB_DOUBLE)
+		{
+			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t> >(v);
+
+			newData = static_cast<T>(piv->getData());
+		}
+
+		return SCALES_NEW ValuePrimitive<T>(newData);
+	}
 }
 

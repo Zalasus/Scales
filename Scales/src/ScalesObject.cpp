@@ -14,17 +14,22 @@
 namespace Scales
 {
 
-	Object::Object(const Class &pClass)
+	Object::Object(const Class *pClass)
 	: myClass(pClass),
 	  fields(nullptr),
 	  storedFieldCount(0)
 	{
-		storedFieldCount = pClass.getFieldCount(); //don't risk a leak. we need to securely delete all elements we create. the class object may still be changed from somewhere else
+		if(myClass == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to create object of null class");
+		}
+
+		storedFieldCount = pClass->getFieldCount(); //don't risk a leak. we need to securely delete all elements we create. the class object may still be changed from somewhere else
 		fields = SCALES_NEW IValue*[storedFieldCount];
 
 		for(uint32_t i = 0; i < storedFieldCount; i++)
 		{
-			const Field *f = myClass.getFieldWithID(i);
+			const Field *f = myClass->getFieldWithID(i);
 
 			if(f == nullptr)
 			{
@@ -43,7 +48,7 @@ namespace Scales
 
 				if(factory != nullptr)
 				{*/
-					fields[i] = IValue::getInstanceFromType(f->getType());
+					fields[i] = IValue::getNewPrimitiveFromType(f->getType());
 
 				/*}else
 				{

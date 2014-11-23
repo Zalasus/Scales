@@ -15,26 +15,7 @@
 namespace Scales
 {
 
-	class ClassID
-	{
-	public:
-
-		ClassID(const String &pNspace, const String &pClassname);
-
-		String getNamespace() const;
-		String getClassname() const;
-
-		bool operator==(const ClassID &right);
-
-		String toString() const;
-
-		static const ClassID EMPTY;
-
-	private:
-
-		String nspace;
-		String classname;
-	};
+	class Class;
 
 	class DataType
 	{
@@ -47,16 +28,15 @@ namespace Scales
 			DTB_FLOAT = 2,
 			DTB_DOUBLE = 3,
 			DTB_STRING = 4,
-			DTB_OBJECT = 5,
-			DTB_ABSTRACT_OBJECT = 6,
+			DTB_ABSTRACT_OBJECT = 5,
+			DTB_OBJECT = 6,
 			DTB_VOID = 255
 		};
 
-		DataType(dataTypeBase_t pBase);
-		DataType(dataTypeBase_t pBase, const ClassID &pClassID);
+		DataType(dataTypeBase_t pBase, const Class *pTypeClass = nullptr);
 
 		dataTypeBase_t getBase() const;
-		ClassID getClassID() const;
+		const Class *getTypeClass() const;
 
 		bool isNumeric() const;
 		bool isArray() const;
@@ -75,13 +55,12 @@ namespace Scales
 		static const DataType FLOAT;
 		static const DataType DOUBLE;
 		static const DataType STRING;
-		static const DataType ABSTRACT_OBJECT;
 		static const DataType _VOID;
 
 	private:
 
 		dataTypeBase_t base;
-		ClassID classID;
+		const Class *typeClass;
 	};
 
 	typedef std::vector<DataType> TypeList;

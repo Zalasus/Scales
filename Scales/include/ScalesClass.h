@@ -19,6 +19,27 @@
 namespace Scales
 {
 
+	class ClassID
+	{
+	public:
+
+		ClassID(const String &pNspace, const String &pClassname);
+
+		String getNamespace() const;
+		String getClassname() const;
+
+		bool operator==(const ClassID &right);
+
+		String toString() const;
+
+		static const ClassID EMPTY;
+
+	private:
+
+		String nspace;
+		String classname;
+	};
+
 	class Class
 	{
 	public:
@@ -59,6 +80,9 @@ namespace Scales
 
 		progAdress_t getJoinedProgramSize() const;
 		const progUnit_t *getJoinedProgramArray() const;
+
+		bool is(const Class *c) const;
+		bool isSubclassOf(const Class *c) const;
 
 		/**
 		 * Copies the given array of program data. Deallocation of the given

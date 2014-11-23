@@ -58,11 +58,14 @@ namespace Scales
 		OP_LESS_EQUAL,
 		OP_GREATER_EQUAL,
 
-		OP_TO_OBJECT_INSTANCE,
+		//Attention! Order of the following opcodes is essential!
 		OP_TO_INT,
 		OP_TO_LONG,
 		OP_TO_FLOAT,
 		OP_TO_DOUBLE,
+		OP_TO_STRING,
+		OP_TO_ABSTRACT_OBJECT,
+		OP_TO_OBJECT,
 
 		OP_PUSH_INT,
 		OP_PUSH_LONG,

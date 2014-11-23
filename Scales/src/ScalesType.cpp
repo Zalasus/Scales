@@ -47,16 +47,9 @@ namespace Scales
 
 
 
-
-	DataType::DataType(DataType::dataTypeBase_t pBase)
+	DataType::DataType(DataType::dataTypeBase_t pBase, const Class *pTypeClass)
 	: base(pBase),
-	  classID(ClassID::EMPTY)
-	{
-	}
-
-	DataType::DataType(DataType::dataTypeBase_t pBase, const ClassID &pClassID)
-	 : base(pBase),
-	   classID(pClassID)
+	  typeClass(pTypeClass)
 	{
 	}
 
@@ -65,9 +58,9 @@ namespace Scales
 		return base;
 	}
 
-	ClassID DataType::getClassID() const
+	const Class *DataType::getTypeClass() const
 	{
-		return classID;
+		return typeClass;
 	}
 
 	bool DataType::isNumeric() const
@@ -100,7 +93,7 @@ namespace Scales
 			return String("string");
 
 		case DTB_OBJECT:
-			return classID.toString();
+			return (typeClass == nullptr) ? "weird object indeed" : typeClass->getID().toString();
 
 		case DTB_ABSTRACT_OBJECT:
 			return String("object");
@@ -122,7 +115,14 @@ namespace Scales
 
 		if(getBase() == DTB_OBJECT)
 		{
-			return t.getClassID() == getClassID();
+			if(getTypeClass() != nullptr && t.getTypeClass() != nullptr)
+			{
+				return getTypeClass() == t.getTypeClass();
+
+			}else
+			{
+				return false;
+			}
 		}
 
 		return true;

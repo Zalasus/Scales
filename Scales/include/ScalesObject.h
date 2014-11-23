@@ -22,16 +22,16 @@ namespace Scales
 		friend class Runner;
 
 	public:
-		Object(const Class &pMyClass);
+		Object(const Class *pMyClass);
 		~Object();
 
-		const Class &getClass() const;
+		const Class *getClass() const;
 
 		IValue *&getFieldByIndex(uint32_t i);
 
 	private:
 
-		const Class &myClass;
+		const Class *myClass;
 
 		IValue **fields;
 		uint32_t storedFieldCount;

@@ -287,6 +287,33 @@ namespace Scales
 		return nullptr;
 	}
 
+	bool Class::is(const Class *c) const
+	{
+		if(c == nullptr)
+		{
+			return false;
+		}
+
+		return c->getID() == getID();
+	}
+
+	bool Class::isSubclassOf(const Class *c) const
+	{
+		if((super == nullptr) || (c == nullptr))
+		{
+			return false;
+		}
+
+		if(super->is(c))
+		{
+			return true;
+
+		}else
+		{
+			return super->isSubclassOf(c);
+		}
+	}
+
 
 }
 
