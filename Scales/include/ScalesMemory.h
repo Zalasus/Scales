@@ -20,10 +20,7 @@
 		return scalesType;\
 	}\
 	\
-	template ValuePrimitive<cType>::ValuePrimitive(cType pData);\
-	template cType &ValuePrimitive<cType>::getData();\
-	template IValue::value_type_t ValuePrimitive<cType>::getValueType();\
-	template IValue *ValuePrimitive<cType>::copy();
+	template class ValuePrimitive<cType>;
 
 namespace Scales
 {
