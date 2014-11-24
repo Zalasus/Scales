@@ -15,17 +15,24 @@
 namespace Scales
 {
 
+	StackElement::StackElement()
+	: value(nullptr)
+	{
+	}
+
 	StackElement::StackElement(IValue *pValue)
 	: value(pValue)
 	{
-		if(pValue == nullptr)
-		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to push pure null value on stack");
-		}
 	}
 
 	IValue *StackElement::getValue() const
 	{
+		//This should actually never happen
+		/*if(value == nullptr)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access pure null value on stack");
+		}*/
+
 		if(value->getValueType() == IValue::VT_REFERENCE)
 		{
 			return *((static_cast<ValueRef*>(value))->getReference());
@@ -56,6 +63,27 @@ namespace Scales
 		SCALES_DELETE value;
 	}
 
+	StackElement &StackElement::operator=(const StackElement &e)
+	{
+		value = e.getRaw();
+
+		return *this;
+	}
+
+
+	//-------------------------------------------------------------
+	//   More efficient specialization of reader function for byte,
+	//   must be defined before first use
+	template <>
+	uint8_t Runner::readIntegral<uint8_t>()
+	{
+		ensureProgSize(1);
+
+		return prog[pc++];
+	}
+	//--------------------------------------------------------------
+
+
 	Runner::Runner(Object *pObj, Root *pRoot, const Function *pFunc)
 	: obj(pObj),
 	  root(pRoot),
@@ -75,7 +103,16 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to run on null object");
 		}
 
-		if(func != nullptr)
+		if(func == nullptr)
+		{
+			pc = 0; //if no function is given, we want to run the global scope program
+
+			aStackSize = obj->getClass()->getGlobalStackSize();
+			aStack = SCALES_NEW StackElement[aStackSize]();
+
+			//leave lStack null. there shouldn't be any locals in the global program
+
+		}else
 		{
 			if(func->isNative())
 			{
@@ -84,9 +121,11 @@ namespace Scales
 
 			pc = func->getAdress();
 
-		}else
-		{
-			pc = 0; //if no function is given, we want to run the global scope program
+			aStackSize = func->getStackSize();
+			aStack = SCALES_NEW StackElement[aStackSize]();
+
+			lStackSize = func->getLocalCount();
+			lStack = SCALES_NEW IValue*[lStackSize]();
 		}
 
 		prog = obj->getClass()->getProgramArray();
@@ -95,12 +134,15 @@ namespace Scales
 
 	Runner::~Runner()
 	{
-		for(uint32_t i = 0; i < lStackSize; i++)
+		if(lStack != nullptr)
 		{
-			SCALES_DELETE lStack[i];
-		}
+			for(uint32_t i = 0; i < lStackSize; i++)
+			{
+				SCALES_DELETE lStack[i];
+			}
 
-		SCALES_DELETE[] lStack;
+			SCALES_DELETE[] lStack;
+		}
 
 
 		for(uint32_t i = 0; i < aStackSize; i++)
@@ -151,8 +193,8 @@ namespace Scales
 
 			case OP_BEGIN:
 			{
-				uint32_t blockLocalCount = readIntegral<uint32_t>();
 				//This operation does nothing at the moment
+				readIntegral<uint32_t>(); //just discard the local count...
 				break;
 			}
 
@@ -166,7 +208,7 @@ namespace Scales
 			case OP_DECLARELOCAL:
 			{
 				String varname = readString<uint8_t>();
-				DataType vartype = readDataType();
+				DataType vartype = readDataType(); //TODO: implement proper local counting in compiler, and somehow write local index to bytecode
 				getLStackElement(lStackTop++) = IValue::getNewPrimitiveFromType(vartype);
 				break;
 			}
@@ -473,7 +515,7 @@ namespace Scales
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to instantiate non-existent class");
 				}
-				Object *o = root->createObject(*cl);
+				Object *o = root->createObject(cl);
 				//TODO: call constructor here
 				aStackPush(StackElement(SCALES_NEW ValueObject(o)));
 				break;
@@ -516,7 +558,7 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_NOT_IMPLEMENTED, "Natives can't be called right now");
 		}
 
-		Runner r = Runner(target, func);
+		Runner r = Runner(target, root, func);
 
 		//Transfer parameters to aStack of new runner
 		for(uint32_t i = 0; i < paramCount; i++)
@@ -551,7 +593,7 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to call member in non-object value");
 		}
 
-		ValueObject *ov = static_cast<ValueObject>(element.getValue());
+		ValueObject *ov = static_cast<ValueObject*>(element.getValue());
 		Object *o = ov->getObject();
 		IValue *ret = functionCall(o, name, paramCount);
 
@@ -560,24 +602,22 @@ namespace Scales
 		return ret;
 	}
 
-	//TODO: This function may not be working. check it when uncommenting
-	/*
+
 	void Runner::destroyLocals(uint32_t amount)
 	{
-
+		if(lStackTop < amount)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Variable stack corruption");
+		}
 
 		for(uint32_t i = 0; i < amount; i++)
 		{
-			if((lStackTop < lStackSize) && (lStackTop > 0))
-			{
-				lStackTop--;
+			lStackTop--;
 
-				SCALES_DELETE lStack[lStackTop];
-				lStack[lStackTop] = nullptr;
-			}
+			SCALES_DELETE lStack[lStackTop];
+			lStack[lStackTop] = nullptr;
 		}
-
-	}*/
+	}
 
 	void Runner::ensureAStackSize(uint32_t size)
 	{
@@ -679,25 +719,25 @@ namespace Scales
 
 		if(iv->getDataType() == DataType::DTB_INT)
 		{
-			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t> >(iv);
+			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t>* >(iv);
 
 			return piv->getData() != 0;
 
 		}else if(iv->getDataType() == DataType::DTB_LONG)
 		{
-			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t> >(iv);
+			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t>* >(iv);
 
 			return piv->getData() != 0;
 
 		}else if(iv->getDataType() == DataType::DTB_FLOAT)
 		{
-			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t> >(iv);
+			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t>* >(iv);
 
 			return piv->getData() != 0;
 
 		}else if(iv->getDataType() == DataType::DTB_DOUBLE)
 		{
-			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t> >(iv);
+			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t>* >(iv);
 
 			return piv->getData() != 0;
 		}
@@ -719,25 +759,25 @@ namespace Scales
 
 		if(v->getDataType() == DataType::DTB_INT)
 		{
-			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t> >(v);
+			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t>* >(v);
 
 			newData = static_cast<T>(piv->getData());
 
 		}else if(v->getDataType() == DataType::DTB_LONG)
 		{
-			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t> >(v);
+			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t>* >(v);
 
 			newData = static_cast<T>(piv->getData());
 
 		}else if(v->getDataType() == DataType::DTB_FLOAT)
 		{
-			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t> >(v);
+			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t>* >(v);
 
 			newData = static_cast<T>(piv->getData());
 
 		}else if(v->getDataType() == DataType::DTB_DOUBLE)
 		{
-			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t> >(v);
+			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t>* >(v);
 
 			newData = static_cast<T>(piv->getData());
 		}
@@ -766,22 +806,6 @@ namespace Scales
 		}
 
 		return v;
-	}
-
-	template <>
-	progUnit_t Runner::readIntegral<progUnit_t>()
-	{
-		ensureProgSize(1);
-
-		return prog[pc++];
-	}
-
-	template <>
-	uint8_t Runner::readIntegral<uint8_t>()
-	{
-		ensureProgSize(1);
-
-		return prog[pc++];
 	}
 
 	float Runner::readFloat()
@@ -836,7 +860,7 @@ namespace Scales
 			}
 		}
 
-		return DataType(typeID, typeClass);
+		return DataType(DataType::baseByID(typeID), typeClass);
 	}
 }
 

@@ -84,6 +84,9 @@ namespace Scales
 		bool is(const Class *c) const;
 		bool isSubclassOf(const Class *c) const;
 
+		uint32_t getGlobalStackSize() const;
+		void setGlobalStackSize(uint32_t i);
+
 		/**
 		 * Copies the given array of program data. Deallocation of the given
 		 * data is not handled by this function. The user has to deallocate
@@ -105,6 +108,8 @@ namespace Scales
 
 		progUnit_t *program;
 		progAdress_t programSize;
+
+		uint32_t globalStackSize;
 	};
 
 }

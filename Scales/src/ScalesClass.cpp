@@ -280,6 +280,11 @@ namespace Scales
 		return programSize;
 	}
 
+	const progUnit_t *Class::getProgramArray() const
+	{
+		return program;
+	}
+
 	progAdress_t Class::getJoinedProgramSize() const
 	{
 		if(super == nullptr)
@@ -353,6 +358,15 @@ namespace Scales
 		}
 	}
 
+	uint32_t Class::getGlobalStackSize() const
+	{
+		return globalStackSize;
+	}
+
+	void Class::setGlobalStackSize(uint32_t i)
+	{
+		globalStackSize = i;
+	}
 
 }
 

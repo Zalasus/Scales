@@ -49,6 +49,7 @@ namespace Scales
 		static bool canCastImplicitly(const DataType &from, const DataType &to);
 		static DataType mathCast(const DataType &left, const DataType &right);
 		static dataTypeBase_t byName(const String &name);
+		static dataTypeBase_t baseByID(uint32_t i);
 
 		static const DataType INT;
 		static const DataType LONG;

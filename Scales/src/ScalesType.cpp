@@ -176,6 +176,11 @@ namespace Scales
 		}
 	}
 
+	DataType::dataTypeBase_t DataType::baseByID(uint32_t i)
+	{
+		return static_cast<dataTypeBase_t>(i); //Yes, yes. I know. But I don't care. Conversion is handled by this function so you can do it yourself.
+	}
+
 	const DataType DataType::INT = DataType(DataType::DTB_INT);
 	const DataType DataType::LONG = DataType(DataType::DTB_LONG);
 	const DataType DataType::FLOAT = DataType(DataType::DTB_FLOAT);

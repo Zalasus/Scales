@@ -68,6 +68,18 @@ namespace Scales
 		SCALES_DELETE[] fields;
 	}
 
+	const Class *Object::getClass() const
+	{
+		return myClass;
+	}
+
+	IValue *&Object::getFieldByIndex(uint32_t i)
+	{
+		//TODO: Check for right index here
+
+		return fields[i];
+	}
+
 }
 
 

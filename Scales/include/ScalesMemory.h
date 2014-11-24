@@ -18,7 +18,12 @@
 	DataType ValuePrimitive<cType>::getDataType()\
 	{\
 		return scalesType;\
-	}
+	}\
+	\
+	template ValuePrimitive<cType>::ValuePrimitive(cType pData);\
+	template cType &ValuePrimitive<cType>::getData();\
+	template IValue::value_type_t ValuePrimitive<cType>::getValueType();\
+	template IValue *ValuePrimitive<cType>::copy();
 
 namespace Scales
 {
@@ -89,6 +94,12 @@ namespace Scales
 	class ValueObject : public IValue
 	{
 	public:
+
+		/**
+		 * Creates an object value of the given object with custom class mask. If the mask is set to
+		 * null, the value is an abstract object. The object pointer must not be null.
+		 */
+		ValueObject(Object *pObj);
 
 		/**
 		 * Creates an object value of the given object with custom class mask. If the mask is set to

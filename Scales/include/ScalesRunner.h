@@ -22,6 +22,11 @@ namespace Scales
 	{
 	public:
 
+		/**
+		 * Creates an unitialized stack element (value = nullptr)
+		 */
+		StackElement();
+
 		StackElement(IValue *pValue);
 
 		/**
@@ -47,9 +52,11 @@ namespace Scales
 		 */
 		void free();
 
+		StackElement &operator=(const StackElement &e);
+
 	private:
 
-		IValue * const value;
+		IValue *value;
 
 	};
 
@@ -107,13 +114,13 @@ namespace Scales
 		progAdress_t progSize;
 		progAdress_t pc;
 
-		StackElement *aStack;
-		uint32_t aStackSize;
-		uint32_t aStackTop;
-
 		IValue **lStack;
 		uint32_t lStackSize;
 		uint32_t lStackTop;
+
+		StackElement *aStack;
+		uint32_t aStackSize;
+		uint32_t aStackTop;
 
 	};
 
