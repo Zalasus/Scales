@@ -110,7 +110,7 @@ namespace Scales
 		return newList;
 	}
 
-	Object *Root::createObject(const Class &c)
+	Object *Root::createObject(const Class *c)
 	{
 		Object *o = SCALES_NEW Object(c);
 

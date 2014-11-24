@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ScalesBytecode.h"
+#include "ScalesMemory.h"
 
 namespace Scales
 {
@@ -52,6 +53,8 @@ namespace Scales
 
 	};
 
+	class Function;
+
 	class Runner
 	{
 	public:
@@ -83,20 +86,24 @@ namespace Scales
 		template <typename T>
 		IValue *numericCast(IValue *v);
 
-		uint8_t readUByte();
-		uint32_t readUInt();
-		int32_t readInt();
-		int64_t readLong();
+		void ensureProgSize(progAdress_t s);
+
+		template <typename T>
+		T readIntegral();
+
 		float readFloat();
 		double readDouble();
-		String readBString();
-		String readIString();
+
+		template <typename T>
+		String readString();
+
 		DataType readDataType();
 
 		Object *obj;
 		Root *root;
 		const Function *func;
-		progUnit_t *prog;
+
+		const progUnit_t *prog;
 		progAdress_t progSize;
 		progAdress_t pc;
 

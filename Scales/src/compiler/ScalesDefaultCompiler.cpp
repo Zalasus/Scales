@@ -794,15 +794,6 @@ namespace Scales
 				DataType type = dataType();
 				paramTypes.push_back(type);
 
-				bool byVal = false;
-
-				t = lexer.peekToken();
-				if(t.is(Token::TT_OPERATOR, "$"))
-				{
-					byVal = true;
-					lexer.readToken(); //consume the $
-				}
-
 				t = name();
 
 				paramNames.push_back(t.getLexem());
@@ -1105,12 +1096,14 @@ namespace Scales
     				error("Expected class identifier after namespace operator, but found: " + t2.getLexem(), t2.getLine());
     			}
 
-    			if(lookupClass(ClassID(t.getLexem(), t2.getLexem())) == nullptr)
+    			const Class *cl = lookupClass(ClassID(t.getLexem(), t2.getLexem()));
+
+    			if(cl == nullptr)
     			{
     				error("Identifier '" + t2.getLexem() + "' does not name a class in namespace '" + t.getLexem() + "'", t2.getLine());
     			}
 
-    			return DataType(DataType::DTB_OBJECT, ClassID(t.getLexem(), t2.getLexem()));
+    			return DataType(DataType::DTB_OBJECT, cl);
 
     		}else
     		{
@@ -1122,7 +1115,7 @@ namespace Scales
 					error("Identifier '" + t.getLexem() + "' does not name a class in current/default/imported namespace", t.getLine());
 				}
 
-    			return DataType(DataType::DTB_OBJECT, typeClass->getID()); //TODO: The class of a data type is currently pointed by name. we might point by pointer to be more efficient
+    			return DataType(DataType::DTB_OBJECT, typeClass);
     		}
 
     	}else
@@ -1776,7 +1769,7 @@ namespace Scales
 						asmout.writeBString(secondIdent.getLexem());
 						asmout.writeBString(thirdIdent.getLexem());
 
-						return targetField->getType();
+						return ExpressionInfo(targetField->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
             		}
 
             	}else if(t2.is(Token::TT_OPERATOR, "(")) //static call (of class in default/imported ns)
@@ -1944,7 +1937,7 @@ namespace Scales
 			asmout.writeBString(instClass->getID().getClassname());
 			asmout.writeUByte(paramCount);
 
-			return ExpressionInfo(DataType(DataType::DTB_OBJECT, instClass->getID()), false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are actually void functions, but the new statement returns the instance, so it is considered as a non-void function call
+			return ExpressionInfo(DataType(DataType::DTB_OBJECT, instClass), false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are actually void functions, but the new statement returns the instance, so it is considered as a non-void function call
 
         }else if(t.is(Token::TT_KEYWORD,"null"))
         {
@@ -1978,7 +1971,7 @@ namespace Scales
         		writeASM("PUSHTHIS");
         		asmout << OP_PUSH_THIS;
 
-        		return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getID()), false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
+        		return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass), false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
         	}
 
         }else if(t.is(Token::TT_KEYWORD,"parent"))
@@ -1992,7 +1985,7 @@ namespace Scales
         	writeASM("PUSHPARENT");
         	asmout << OP_PUSH_PARENT;
 
-        	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()->getID()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
+        	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
 
         }else if(t.is(Token::TT_KEYWORD,"true"))
         {
@@ -2116,11 +2109,6 @@ namespace Scales
     void DefaultCompiler::writeDatatypeToBytecode(const DataType &t)
     {
     	uint8_t id = t.getBase();
-
-    	if(t.isArray())
-    	{
-    		id |= 8;
-    	}
 
     	asmout.writeUByte(id);
 

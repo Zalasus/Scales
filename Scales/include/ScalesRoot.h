@@ -44,7 +44,7 @@ namespace Scales
 		 * of retrieving it, thus rendering the Object useless. Unused Objects are cleaned up automatically if the GC
 		 * is running, or at the latest after the destruction of the Root object.
 		 */
-		Object *createObject(const Class &c);
+		Object *createObject(const Class *c);
 		Object *createObject(const ClassID &classId);
 
 		Thread *createThread();

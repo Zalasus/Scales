@@ -64,7 +64,7 @@ namespace Scales
 
 		}else
 		{
-			if(!(val->getType() == type.getBase())) //still too lazy to implement the != operator
+			if(!(val->getDataType() == type.getBase())) //still too lazy to implement the != operator
 			{
 				SCALES_EXCEPT(Exception::ET_RUNTIME, "Type mismatch in assignment");
 			}

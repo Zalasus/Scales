@@ -7,7 +7,7 @@ namespace Scales
 
 	//public class lexer
 
-    Lexer::Lexer(const String *pKeywords, const uint32_t pKeywordCount, const String *pOperators, const uint32_t pOperatorCount, const bool pIgnoreComments)
+    Lexer::Lexer(coding_t pCoding, const String *pKeywords, const uint32_t pKeywordCount, const String *pOperators, const uint32_t pOperatorCount, const bool pIgnoreComments)
     :
     		input(nullptr),
     		lchar(EOF),

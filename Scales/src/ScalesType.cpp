@@ -6,46 +6,10 @@
  */
 
 #include "ScalesType.h"
+#include "ScalesClass.h"
 
 namespace Scales
 {
-
-	ClassID::ClassID(const String &pNspace, const String &pClassname)
-	: nspace(pNspace),
-	  classname(pClassname)
-	{
-	}
-
-	String ClassID::getNamespace() const
-	{
-		return nspace;
-	}
-
-	String ClassID::getClassname() const
-	{
-		return classname;
-	}
-
-	bool ClassID::operator==(const ClassID &right)
-	{
-		return (getNamespace() == right.getNamespace()) && (getClassname() == right.getClassname());
-	}
-
-	String ClassID::toString() const
-	{
-		if(nspace.empty())
-		{
-			return classname;
-
-		}else
-		{
-			return nspace + ":" + classname;
-		}
-	}
-
-	const ClassID ClassID::EMPTY = ClassID("","");
-
-
 
 	DataType::DataType(DataType::dataTypeBase_t pBase, const Class *pTypeClass)
 	: base(pBase),
@@ -217,7 +181,6 @@ namespace Scales
 	const DataType DataType::FLOAT = DataType(DataType::DTB_FLOAT);
 	const DataType DataType::DOUBLE = DataType(DataType::DTB_DOUBLE);
 	const DataType DataType::STRING = DataType(DataType::DTB_STRING);
-	const DataType DataType::ABSTRACT_OBJECT = DataType(DataType::DTB_ABSTRACT_OBJECT);
 	const DataType DataType::_VOID = DataType(DataType::DTB_VOID);
 
 }

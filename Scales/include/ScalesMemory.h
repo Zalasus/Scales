@@ -84,6 +84,8 @@ namespace Scales
 		IValue ** const ref;
 	};
 
+	class Object;
+
 	class ValueObject : public IValue
 	{
 	public:
@@ -92,7 +94,7 @@ namespace Scales
 		 * Creates an object value of the given object with custom class mask. If the mask is set to
 		 * null, the value is an abstract object. The object pointer must not be null.
 		 */
-		ValueObject(Object *pObj, const Class *pMask = pObj->getClass());
+		ValueObject(Object *pObj, const Class *pMask);
 
 		/**
 		 * Creates a new pointer pointing to the same object with the same mask.
@@ -114,7 +116,7 @@ namespace Scales
 	private:
 
 		Object * const obj;
-		ClassID mask;
+		const Class *mask;
 	};
 
 	class ValueNull : public IValue

@@ -8,6 +8,7 @@
 #include "ScalesMemory.h"
 #include "ScalesUtil.h"
 #include "ScalesException.h"
+#include "ScalesObject.h"
 
 namespace Scales
 {
@@ -116,6 +117,7 @@ namespace Scales
 			return SCALES_NEW ValuePrimitive<String>("");
 
 		default:
+			return nullptr;
 
 		}
 

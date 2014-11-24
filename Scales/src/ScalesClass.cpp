@@ -14,6 +14,45 @@
 namespace Scales
 {
 
+
+	ClassID::ClassID(const String &pNspace, const String &pClassname)
+	: nspace(pNspace),
+	  classname(pClassname)
+	{
+	}
+
+	String ClassID::getNamespace() const
+	{
+		return nspace;
+	}
+
+	String ClassID::getClassname() const
+	{
+		return classname;
+	}
+
+	bool ClassID::operator==(const ClassID &right)
+	{
+		return (getNamespace() == right.getNamespace()) && (getClassname() == right.getClassname());
+	}
+
+	String ClassID::toString() const
+	{
+		if(nspace.empty())
+		{
+			return classname;
+
+		}else
+		{
+			return nspace + ":" + classname;
+		}
+	}
+
+	const ClassID ClassID::EMPTY = ClassID("","");
+
+
+
+
 	Class::Class(const ClassID &pClassID, const Class *pSuper)
 	: classID(pClassID),
 	  super(pSuper),

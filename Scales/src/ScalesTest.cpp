@@ -86,17 +86,11 @@ int main()
 		std::cerr << "Error: No main class found; nothing to run." << std::endl;
 	}
 
-	Scales::Object *o = root.createObject(*mainClass); //TODO: check where to use smartpointers and where not
+	Scales::Object *o = root.createObject(mainClass); //TODO: check where to use smartpointers and where not
 
 	if(o == nullptr)
 	{
 		std::cerr << "Could not instantiate class" << std::endl;
-	}
-
-	Scales::IValue *v = o->getField("f");
-	if(v != nullptr)
-	{
-		std::cout << "Data type of value f in main class: " << v->getType().toString() << std::endl;
 	}
 
 

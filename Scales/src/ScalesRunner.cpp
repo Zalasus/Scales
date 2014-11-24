@@ -60,6 +60,9 @@ namespace Scales
 	: obj(pObj),
 	  root(pRoot),
 	  func(pFunc),
+	  prog(nullptr),
+	  progSize(0),
+	  pc(0),
 	  lStack(nullptr),
 	  lStackSize(0),
 	  lStackTop(0),
@@ -120,77 +123,99 @@ namespace Scales
 			switch(op)
 			{
 			case OP_JUMP_IF_FALSE:
-				uint32_t adr = readUInt();
+			{
+				uint32_t adr = readIntegral<uint32_t>();
 				if(!checkCondition())
 				{
 					pc = adr;
 				}
 				break;
+			}
 
 			case OP_JUMP:
-				pc = readUInt();
+			{
+				pc = readIntegral<uint32_t>();
 				break;
+			}
 
 			case OP_RETURN:
+			{
 				finished = true;
 				break;
-
+			}
 
 			case OP_NOP:
+			{
 				break;
-
+			}
 
 			case OP_BEGIN:
-				uint32_t blockLocalCount = readUInt();
+			{
+				uint32_t blockLocalCount = readIntegral<uint32_t>();
 				//This operation does nothing at the moment
 				break;
+			}
 
 			case OP_END:
-				uint32_t blockLocalCount = readUInt();
+			{
+				uint32_t blockLocalCount = readIntegral<uint32_t>();
 				destroyLocals(blockLocalCount);
 				break;
+			}
 
 			case OP_DECLARELOCAL:
-				String varname = readBString();
+			{
+				String varname = readString<uint8_t>();
 				DataType vartype = readDataType();
 				getLStackElement(lStackTop++) = IValue::getNewPrimitiveFromType(vartype);
 				break;
-
+			}
 
 			case OP_CALL:
-				String funcName = readBString();
-				uint8_t paramCount = readUByte();
+			{
+				String funcName = readString<uint8_t>();
+				uint8_t paramCount = readIntegral<uint8_t>();
 				functionCall(obj, funcName, paramCount);
 				break;
+			}
 
 			case OP_CALL_MEMBER:
-				String funcName = readBString();
-				uint8_t paramCount = readUByte();
+			{
+				String funcName = readString<uint8_t>();
+				uint8_t paramCount = readIntegral<uint8_t>();
 				memberFunctionCall(funcName, paramCount);
 				break;
+			}
 
 			case OP_CALL_STATIC:
-				String nspace = readBString();
-				String classname = readBString();
-				String funcName = readBString();
-				uint8_t paramCount = readUByte();
+			{
+				String nspace = readString<uint8_t>();
+				String classname = readString<uint8_t>();
+				String funcName = readString<uint8_t>();
+				uint8_t paramCount = readIntegral<uint8_t>();
 				//TODO: Make static call here
 				break;
+			}
 
 
 			case OP_DISCARD:
+			{
 				ensureAStackSize(1);
 				aStackPop().free();
 				break;
+			}
 
 			case OP_CLONE:
+			{
 				ensureAStackSize(1);
 				aStackPush(aStackPeek()->copy());
 				break;
+			}
 
 			case OP_POP_VAR:
+			{
 				ensureAStackSize(1);
-				uint32_t globalIndex = readUInt();
+				uint32_t globalIndex = readIntegral<uint32_t>();
 				IValue *oldValue = obj->fields[globalIndex]; //store old value, we need to delete it after the assignment
 
 				if(aStackPeek().isReference())
@@ -211,10 +236,12 @@ namespace Scales
 				SCALES_DELETE oldValue;
 
 				break;
+			}
 
 			case OP_POP_LOCAL_VAR:
+			{
 				ensureAStackSize(1);
-				uint32_t localIndex = readUInt();
+				uint32_t localIndex = readIntegral<uint32_t>();
 				IValue *oldVal = getLStackElement(localIndex);
 
 				if(aStackPeek().isReference())
@@ -233,36 +260,48 @@ namespace Scales
 				SCALES_DELETE oldVal;
 
 				break;
+			}
 
 			case OP_POP_REF:
+			{
 				popRef(false);
 				break;
+			}
 
 			case OP_POP_REF_SOFT:
+			{
 				popRef(true);
 				break;
+			}
 
 			case OP_PUSH_REF:
-				uint32_t globalIndex = readUInt();
+			{
+				uint32_t globalIndex = readIntegral<uint32_t>();
 				aStackPush(StackElement(SCALES_NEW ValueRef(&(obj->getFieldByIndex(globalIndex))))); //TODO: Look at all these parentheses! Wonderful, isn't it? Like back in my LISP-days...
 				break;
+			}
 
 			case OP_PUSH_LOCAL_REF:
-				uint32_t localIndex = readUInt();
+			{
+				uint32_t localIndex = readIntegral<uint32_t>();
 				aStackPush(StackElement(SCALES_NEW ValueRef(&(getLStackElement(localIndex)))));
 				break;
+			}
 
 			case OP_PUSH_STATIC_REF:
+			{
 				//static refs currently unsupported. just read names and push null value
-				readBString();
-				readBString();
-				readBString();
+				readString<uint8_t>();
+				readString<uint8_t>();
+				readString<uint8_t>();
 				aStackPush(StackElement(nullptr));
 				break;
+			}
 
 			case OP_GET_MEMBER:
+			{
 				ensureAStackSize(1);
-				uint32_t memberIndex = readUInt();
+				uint32_t memberIndex = readIntegral<uint32_t>();
 				if(aStackPeek()->getValueType() != IValue::VT_OBJECT)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of non-object type");
@@ -272,12 +311,15 @@ namespace Scales
 				aStackPop().free();
 				aStackPush(StackElement(SCALES_NEW ValueRef(mref)));
 				break;
+			}
 
 			case OP_GET_INDEX:
+			{
 				ensureAStackSize(1);
-				uint32_t index = readUInt();
+				uint32_t index = readIntegral<uint32_t>();
 				//TODO: further implement array/string access
 				break;
+			}
 
 			case OP_ADD:
 			case OP_SUBTRACT:
@@ -296,14 +338,14 @@ namespace Scales
 			case OP_TO_OBJECT:
 			{
 				ensureAStackSize(1);
-				String nspace = readBString();
-				String classname = readBString();
+				String nspace = readString<uint8_t>();
+				String classname = readString<uint8_t>();
 				const Class *cl = root->getClass(ClassID(nspace, classname));
 				if(cl == nullptr)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast to non-existent class");
 				}
-				if(aStackPeek()->getValueType() != DataType::DTB_OBJECT)
+				if(aStackPeek()->getValueType() != IValue::VT_OBJECT)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast non-object to object");
 				}
@@ -320,7 +362,7 @@ namespace Scales
 			case OP_TO_ABSTRACT_OBJECT:
 			{
 				ensureAStackSize(1);
-				if(aStackPeek()->getValueType() != DataType::DTB_OBJECT)
+				if(aStackPeek()->getValueType() != IValue::VT_OBJECT)
 				{
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cast non-object to abstract object");
 				}
@@ -332,77 +374,100 @@ namespace Scales
 
 
 			case OP_TO_INT:
+			{
 				ensureAStackSize(1);
 				IValue *val = aStackPeek().getValue();
 				IValue *castedVal = numericCast<primitive_int_t>(val);
 				aStackPop().free();
 				aStackPush(StackElement(castedVal));
 				break;
+			}
 
 			case OP_TO_LONG:
+			{
 				ensureAStackSize(1);
 				IValue *val = aStackPeek().getValue();
 				IValue *castedVal = numericCast<primitive_long_t>(val);
 				aStackPop().free();
 				aStackPush(StackElement(castedVal));
 				break;
+			}
 
 			case OP_TO_FLOAT:
+			{
 				ensureAStackSize(1);
 				IValue *val = aStackPeek().getValue();
 				IValue *castedVal = numericCast<primitive_float_t>(val);
 				aStackPop().free();
 				aStackPush(StackElement(castedVal));
 				break;
+			}
 
 			case OP_TO_DOUBLE:
+			{
 				ensureAStackSize(1);
 				IValue *val = aStackPeek().getValue();
 				IValue *castedVal = numericCast<primitive_double_t>(val);
 				aStackPop().free();
 				aStackPush(StackElement(castedVal));
 				break;
+			}
 
 
 			case OP_PUSH_INT:
-				int32_t i = readInt();
+			{
+				int32_t i = readIntegral<int32_t>();
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int32_t>(i)));
 				break;
+			}
 
 			case OP_PUSH_LONG:
-				int64_t l = readLong();
+			{
+				int64_t l = readIntegral<int64_t>();
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int64_t>(l)));
 				break;
+			}
 
 			case OP_PUSH_FLOAT:
+			{
 				float f = readFloat();
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<float>(f)));
 				break;
+			}
 
 			case OP_PUSH_DOUBLE:
+			{
 				double d = readDouble();
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<double>(d)));
 				break;
+			}
 
 			case OP_PUSH_STRING:
-				String s = readIString();
+			{
+				String s = readString<uint32_t>();
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<String>(s)));
 				break;
+			}
 
 			case OP_PUSH_NULL:
+			{
 				aStackPush(StackElement(nullptr));
 				break;
+			}
 
 			case OP_PUSH_THIS:
-			case OP_PUSH_PARENT: //TODO: make parent work as expected
+			case OP_PUSH_PARENT:
+			{
+				//TODO: make parent work as expected
 				aStackPush(StackElement(SCALES_NEW ValueObject(obj)));
 				break;
+			}
 
 			case OP_NEW:
-				{
-				String nspace = readBString();
-				String classname = readBString();
-				uint32_t paramCount = readUInt();
+			{
+				String nspace = readString<uint8_t>();
+				String classname = readString<uint8_t>();
+				uint32_t paramCount = readIntegral<uint32_t>();
 				const Class *cl = root->getClass(ClassID(nspace, classname));
 				if(cl == nullptr)
 				{
@@ -412,7 +477,8 @@ namespace Scales
 				//TODO: call constructor here
 				aStackPush(StackElement(SCALES_NEW ValueObject(o)));
 				break;
-				}
+			}
+
 			}
 
 			if(finished)
@@ -512,6 +578,45 @@ namespace Scales
 		}
 
 	}*/
+
+	void Runner::ensureAStackSize(uint32_t size)
+	{
+		if(aStackTop < size)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
+		}
+	}
+
+	StackElement Runner::aStackPop()
+	{
+		if(aStackTop <= 0)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
+		}
+
+		return aStack[--aStackTop];
+	}
+
+	StackElement Runner::aStackPeek()
+	{
+		if(aStackTop <= 0)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
+		}
+
+		return aStack[aStackTop - 1];
+
+	}
+
+	void Runner::aStackPush(StackElement e)
+	{
+		if(aStackTop > aStackSize)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack overflow");
+		}
+
+		aStack[aStackTop++] = e;
+	}
 
 	IValue *&Runner::getLStackElement(uint32_t i)
 	{
@@ -638,6 +743,100 @@ namespace Scales
 		}
 
 		return SCALES_NEW ValuePrimitive<T>(newData);
+	}
+
+	void Runner::ensureProgSize(progAdress_t s)
+	{
+		if((pc + s) > progSize)
+		{
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Program counter overflow");
+		}
+	}
+
+	template <typename T>
+	T Runner::readIntegral()
+	{
+		ensureProgSize(sizeof(T));
+
+		T v = 0;
+
+		for(uint32_t i = 0; i < sizeof(T); i++)
+		{
+			v |= prog[pc++] << (i * 8);
+		}
+
+		return v;
+	}
+
+	template <>
+	progUnit_t Runner::readIntegral<progUnit_t>()
+	{
+		ensureProgSize(1);
+
+		return prog[pc++];
+	}
+
+	template <>
+	uint8_t Runner::readIntegral<uint8_t>()
+	{
+		ensureProgSize(1);
+
+		return prog[pc++];
+	}
+
+	float Runner::readFloat()
+	{
+		ensureProgSize(sizeof(float));
+
+		pc += sizeof(float);
+
+		return 0;
+	}
+
+	double Runner::readDouble()
+	{
+		ensureProgSize(sizeof(double));
+
+		pc += sizeof(double);
+
+		return 0;
+	}
+
+	template <typename T>
+	String Runner::readString()
+	{
+		T l = readIntegral<T>();
+		ensureProgSize(l);
+
+		String s = String(l, '\0');
+		for(uint32_t i = 0; i < l; i++)
+		{
+			s[i] = prog[pc++];
+		}
+
+		return s;
+	}
+
+	DataType Runner::readDataType()
+	{
+		uint8_t typeID = readIntegral<uint8_t>();
+
+		const Class *typeClass = nullptr;
+
+		if(typeID == DataType::DTB_OBJECT)
+		{
+			String nspace = readString<uint8_t>();
+			String classname = readString<uint8_t>();
+
+			typeClass = root->getClass(ClassID(nspace, classname));
+
+			if(typeClass == nullptr)
+			{
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Unknown class in bytecode");
+			}
+		}
+
+		return DataType(typeID, typeClass);
 	}
 }
 
