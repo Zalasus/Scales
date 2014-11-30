@@ -17,6 +17,7 @@
 #include "ScalesReflection.h"
 #include "ScalesException.h"
 #include "ScalesObject.h"
+#include "ScalesRunner.h"
 
 class Scales_Native_Console : public Scales::Reflectable
 {
@@ -45,6 +46,7 @@ int main()
 	Scales::Compiler *comp = root.getCompiler(Scales::CF_GENERIC);
 
 	const Scales::Class *mainClass = nullptr;
+	const Scales::Function *mainFunc = nullptr;
 	if(comp != nullptr)
 	{
 		//There is a compiler we can use
@@ -68,6 +70,7 @@ int main()
 					std::cout << "\tMAIN";
 
 					mainClass = cl;
+					mainFunc = cl->getFunction("main",Scales::TypeList());
 				}
 
 				std::cout << std::endl;
@@ -93,6 +96,16 @@ int main()
 		std::cerr << "Could not instantiate class" << std::endl;
 	}
 
+
+	try
+	{
+		Scales::Runner r(o, &root, mainFunc);
+		r.run();
+
+	}catch(Scales::Exception &e)
+	{
+		std::cerr << e.getMessage() << std::endl;
+	}
 
 	return 0;
 }

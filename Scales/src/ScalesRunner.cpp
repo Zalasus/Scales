@@ -108,7 +108,10 @@ namespace Scales
 			pc = 0; //if no function is given, we want to run the global scope program
 
 			aStackSize = obj->getClass()->getGlobalStackSize();
-			aStack = SCALES_NEW StackElement[aStackSize]();
+			if(aStackSize > 0)
+			{
+				aStack = SCALES_NEW StackElement[aStackSize]();
+			}
 
 			//leave lStack null. there shouldn't be any locals in the global program
 
@@ -122,10 +125,16 @@ namespace Scales
 			pc = func->getAdress();
 
 			aStackSize = func->getStackSize();
-			aStack = SCALES_NEW StackElement[aStackSize]();
+			if(aStackSize > 0) //TODO: This check prevents us from a bad_alloc, but could have unforesseen consequences, so better check it
+			{
+				aStack = SCALES_NEW StackElement[aStackSize]();
+			}
 
 			lStackSize = func->getLocalCount();
-			lStack = SCALES_NEW IValue*[lStackSize]();
+			if(lStackSize > 0)
+			{
+				lStack = SCALES_NEW IValue*[lStackSize]();
+			}
 		}
 
 		prog = obj->getClass()->getProgramArray();
@@ -650,7 +659,7 @@ namespace Scales
 
 	void Runner::aStackPush(StackElement e)
 	{
-		if(aStackTop > aStackSize)
+		if(aStackTop >= aStackSize)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack overflow");
 		}

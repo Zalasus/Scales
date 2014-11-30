@@ -36,7 +36,7 @@ namespace Scales
 		currentClass(nullptr),
 		currentFunction(nullptr),
 		lastUID(0),
-		lexer(Lexer::CODING_ASCII, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
+		lexer(Lexer::CODING_UTF8_ASCII, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
     {
     }
 
@@ -1683,7 +1683,7 @@ namespace Scales
             asmout << OP_PUSH_STRING;
             asmout.writeIString(t.getLexem()); //TODO: Process escape sequences here
 
-           return ExpressionInfo(DataType(DataType::DTB_STRING), true, ExpressionInfo::FT_LITERAL);
+            return ExpressionInfo(DataType(DataType::DTB_STRING), true, ExpressionInfo::FT_LITERAL);
 
         }else if(t.getType() == Token::TT_IDENT)
         {
@@ -2196,6 +2196,19 @@ namespace Scales
     uint32_t DefaultCompiler::getNewUID()
     {
     	return ++lastUID;
+    }
+
+    void DefaultCompiler::incrementStackSize(bool global)
+    {
+    	//increment the stack size counter for the unit we are just creating
+		if(global)
+		{
+			currentClass->setGlobalStackSize(currentClass->getGlobalStackSize() + 1);
+
+		}else
+		{
+			currentFunction->setStackSize(currentFunction->getStackSize() + 1);
+		}
     }
 
     int32_t DefaultCompiler::parseInt(const String &s)

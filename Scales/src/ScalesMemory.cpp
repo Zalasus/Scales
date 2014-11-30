@@ -126,15 +126,8 @@ namespace Scales
 
 
 	ValueObject::ValueObject(Object *pObj)
-	 : obj(pObj),
-	   mask(nullptr)
+	: ValueObject(pObj, pObj->getClass())
 	{
-		if(obj == nullptr)
-		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to create null-object");
-		}
-
-		mask = obj->getClass();
 	}
 
 	ValueObject::ValueObject(Object *pObj, const Class *pMask)

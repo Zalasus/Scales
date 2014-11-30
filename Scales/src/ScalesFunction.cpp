@@ -14,7 +14,9 @@ namespace Scales
 	 : name(pName),
 	   paramTypes(pParamTypes),
 	   returnType(DataType::DTB_VOID),
-	   adress(0)
+	   adress(0),
+	   localCount(0),
+	   stackSize(0)
 	{
 	}
 
@@ -53,14 +55,24 @@ namespace Scales
 		return !isNative() && adress != 0;
 	}
 
+	void Function::setLocalCount(uint32_t l)
+	{
+		localCount = l;
+	}
+
 	uint32_t Function::getLocalCount() const
 	{
-		return 0; //TODO: Locals here
+		return localCount;
+	}
+
+	void Function::setStackSize(uint32_t s)
+	{
+		stackSize = s;
 	}
 
 	uint32_t Function::getStackSize() const
 	{
-		return 0; //TODO: Stack size here
+		return stackSize;
 	}
 
 	bool Function::matches(const String &pName, const TypeList &pParamTypes) const

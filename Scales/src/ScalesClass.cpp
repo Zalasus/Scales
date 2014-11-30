@@ -57,7 +57,8 @@ namespace Scales
 	: classID(pClassID),
 	  super(pSuper),
 	  program(nullptr),
-	  programSize(0)
+	  programSize(0),
+	  globalStackSize(0)
 	{
 	}
 

@@ -179,8 +179,6 @@ namespace Scales
         ExpressionInfo indexFactor(const Scope &expressionScope);
         ExpressionInfo factor(const Scope &expressionScope);
 
-        ExpressionInfo staticExpression();
-
         TypeList parameterList(const Scope &scope);
         DataType functionCall(const String &funcName, bool member, const Scope &scope, const DataType &baseType = DataType(DataType::DTB_VOID));
 
@@ -193,6 +191,8 @@ namespace Scales
         String escapeASMChars(const String &s);
 
         uint32_t getNewUID();
+        void incrementStackSize(bool global);
+        void decrementStackSize(bool global);
 
         bool namespaceExists(const String &nspace);
 

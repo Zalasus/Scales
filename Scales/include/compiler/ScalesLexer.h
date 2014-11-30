@@ -80,7 +80,9 @@ namespace Scales
 
 		enum coding_t
 		{
-			CODING_ASCII
+			CODING_UTF8_ASCII,
+			CODING_UTF16,
+			CODING_EBCDIC
 		};
 
         Lexer(coding_t pCoding, const String *keywords, const uint32_t keywordCount, const String *operators, const uint32_t operatorCount, const bool ignoreComments);

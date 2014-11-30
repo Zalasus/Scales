@@ -32,7 +32,10 @@ namespace Scales
 		void setAdress(progAdress_t a);
 		bool hasAdress() const; //only true if function is not native and adress is not 0
 
-		uint32_t getLocalCount() const; // returns the total amount of different local variables declared in this function
+		void setLocalCount(uint32_t l);
+		uint32_t getLocalCount() const; // returns the maximum amount of local variables that reside in memory during execution of this function
+
+		void setStackSize(uint32_t s);
 		uint32_t getStackSize() const; // returns the amount of elements the will be on the stack at most
 
 		bool isConstructor() const; //only true if function name is "init"
@@ -49,6 +52,8 @@ namespace Scales
 		DataType returnType; //void by default
 
 		progAdress_t adress; //A value of 0 means the function has no adress (the adress of a function should never be 0, as it is always preceeded by a JMP)
+		uint32_t localCount;
+		uint32_t stackSize;
 	};
 
 }
