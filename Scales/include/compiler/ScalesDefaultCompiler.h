@@ -139,6 +139,8 @@ namespace Scales
         Function *currentFunction;
 
         uint32_t lastUID;
+        uint32_t currentGlobalStackMax;
+        uint32_t currentFunctionStackMax;
 
         Lexer lexer;
 
@@ -191,8 +193,8 @@ namespace Scales
         String escapeASMChars(const String &s);
 
         uint32_t getNewUID();
-        void incrementStackSize(bool global);
-        void decrementStackSize(bool global);
+        void incrementStackSize(uint32_t i = 1);
+        void decrementStackSize(uint32_t i = 1);
 
         bool namespaceExists(const String &nspace);
 

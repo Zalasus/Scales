@@ -79,6 +79,8 @@ class Main extends App binds Scales_App
 	int i = 1;
 	
 	public string f;
+	
+	private native func void foo();
 
 	public func void main()
 	
@@ -87,8 +89,7 @@ class Main extends App binds Scales_App
 		#static calls are not yet supported
 		#System:Out:println("The quick brown fox jumps over the lazy dog");
 	
-		int j;
-	
+		foo();
 	
 		if(i)
 		
@@ -98,6 +99,7 @@ class Main extends App binds Scales_App
 		else
 		
 		end
+		
 	
 	end
 

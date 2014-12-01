@@ -5,6 +5,7 @@
  *      Author: Zalasus
  */
 
+#include <iostream>
 
 #include "ScalesRunner.h"
 
@@ -218,7 +219,8 @@ namespace Scales
 			{
 				String varname = readString<uint8_t>();
 				DataType vartype = readDataType(); //TODO: implement proper local counting in compiler, and somehow write local index to bytecode
-				getLStackElement(lStackTop++) = IValue::getNewPrimitiveFromType(vartype);
+				getLStackElement(lStackTop) = IValue::getNewPrimitiveFromType(vartype);
+				lStackTop++;
 				break;
 			}
 
@@ -367,7 +369,7 @@ namespace Scales
 			case OP_GET_INDEX:
 			{
 				ensureAStackSize(1);
-				uint32_t index = readIntegral<uint32_t>();
+				readIntegral<uint32_t>(); //discard the index
 				//TODO: further implement array/string access
 				break;
 			}
@@ -564,7 +566,13 @@ namespace Scales
 		{
 			//TODO: Implement native calls here
 
-			SCALES_EXCEPT(Exception::ET_NOT_IMPLEMENTED, "Natives can't be called right now");
+			//SCALES_EXCEPT(Exception::ET_NOT_IMPLEMENTED, "Natives can't be called right now");
+
+			//use this stub for testing...
+
+			std::cout << "a native was called..." << std::endl;
+
+			return nullptr;
 		}
 
 		Runner r = Runner(target, root, func);
@@ -669,7 +677,7 @@ namespace Scales
 
 	IValue *&Runner::getLStackElement(uint32_t i)
 	{
-		if(i >= lStackTop)
+		if(i >= lStackSize)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
 		}

@@ -36,6 +36,8 @@ namespace Scales
 		currentClass(nullptr),
 		currentFunction(nullptr),
 		lastUID(0),
+		currentGlobalStackMax(0),
+		currentFunctionStackMax(0),
 		lexer(Lexer::CODING_UTF8_ASCII, KEYWORDS, KEYWORD_COUNT, OPERATORS, OPERATOR_COUNT, true)
     {
     }
@@ -429,6 +431,7 @@ namespace Scales
 					writeASM(String("JUMPFALSE while_uid") + currentWhileUID + "_end");
 					asmout << OP_JUMP_IF_FALSE;
 					asmout.writeMarker(String("while_uid") + currentWhileUID + "_end");
+					decrementStackSize();
 
 					block(BlockInfo::BT_WHILE, Scope(scope.getNestId() + 1, blocksInThisBlock++, currentWhileUID));
 
@@ -465,6 +468,7 @@ namespace Scales
 				asmout << OP_INVERT;
 				asmout << OP_JUMP_IF_FALSE;
 				asmout.writeMarker(String("dowhile_uid") + currentDoWhileUID + "_start");
+				decrementStackSize();
 
 				writeASM(String("#dowhile_uid") + currentDoWhileUID + "_end:");
 
@@ -587,6 +591,7 @@ namespace Scales
 		writeASM(String("JUMPFALSE if_uid") + currentIfUID + "_end");
 		asmout << OP_JUMP_IF_FALSE;
 		asmout.writeMarker(String("if_uid") + currentIfUID + "_end");
+		decrementStackSize();
 
 		BlockInfo binf = block(BlockInfo::BT_IF, Scope(scope.getNestId()+1, blocksInThisBlock++, currentIfUID));
 
@@ -669,7 +674,7 @@ namespace Scales
 
     void DefaultCompiler::leftEval(const Scope &scope)
 	{
-    	ExpressionInfo left = expression(false, scope); //nope, this is not a value context. we don't want anything to stay on the stack, please
+    	expression(false, scope); //nope, this is not a value context. we don't want anything to stay on the stack, please
 
     	Token t = lexer.readToken();
     	if(!t.is(Token::TT_OPERATOR, ";"))
@@ -747,6 +752,7 @@ namespace Scales
 
 			writeASM("POPVAR '" + ident.getLexem() + "'");
 			asmout << OP_POP_VAR;
+			decrementStackSize();
 
 		}else if(!t.is(Token::TT_OPERATOR, ";"))
 		{
@@ -909,6 +915,11 @@ namespace Scales
 
 		locals.clear(); //delete any locals remaining from the last compiled function
 
+		//parameters are on stack right in the beginning of the function.
+		incrementStackSize(paramTypes.size());
+		//they are removed in a few moments, so we can decrement the count for all right now
+		decrementStackSize(paramTypes.size());
+
 		for(int i = paramTypes.size()-1; i >= 0 ; i--)
 		{
 			String paraName = paramNames[i];
@@ -937,6 +948,10 @@ namespace Scales
 
 		writeASM("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end:");
 		asmout.defineMarker("func_" + ident.getLexem() + "_uid" + currentFunctionUID + "_end");
+
+		currentFunction->setLocalCount(binf.getLocalCount() + 1); //TODO: this is only the count of locals in the uppermost function block. we want the TOTAL amount of locals (this +1 is unintentional, too)
+		currentFunction = nullptr;
+		currentFunctionStackMax = 0;
     }
 
     TypeList DefaultCompiler::parameterList(const Scope &scope)
@@ -980,6 +995,10 @@ namespace Scales
 
 		TypeList paramTypes = parameterList(scope);
 
+		//simulate the called function takign the arguments off the stack
+		decrementStackSize(paramTypes.size());
+
+		DataType returnType = DataType::_VOID;
 		if(member)
 		{
 			if(baseType.getBase() != DataType::DTB_OBJECT)
@@ -1017,7 +1036,7 @@ namespace Scales
 			asmout.writeBString(funcName);
 			asmout.writeUByte(paramTypes.size());
 
-			return membFunction->getReturnType();
+			returnType = membFunction->getReturnType();
 
 		}else
 		{
@@ -1035,8 +1054,15 @@ namespace Scales
 			asmout.writeBString(funcName);
 			asmout.writeUByte(paramTypes.size());
 
-			return ownFunction->getReturnType();
+			returnType = ownFunction->getReturnType();
 		}
+
+		if(returnType.getBase() != DataType::DTB_VOID)
+		{
+			incrementStackSize();
+		}
+
+		return returnType;
     }
 
     ClassID DefaultCompiler::classID()
@@ -1162,6 +1188,7 @@ namespace Scales
         		//We have a compound operator that requires a second instance of the variable reference for the pre-assign operation
         		writeASM("CLONE");
         		asmout << OP_CLONE;
+        		incrementStackSize();
         	}
 
         	ExpressionInfo rightInfo = expression(true, expressionScope);
@@ -1175,21 +1202,25 @@ namespace Scales
 			{
 				writeASM("ADD");
 				asmout << OP_ADD;
+				decrementStackSize();
 
 			}else if(t.is(Token::TT_OPERATOR, "-="))
 			{
 				writeASM("SUBTRACT");
 				asmout << OP_SUBTRACT;
+				decrementStackSize();
 
 			}else if(t.is(Token::TT_OPERATOR, "*="))
 			{
 				writeASM("MULTIPLY");
 				asmout << OP_MULTIPLY;
+				decrementStackSize();
 
 			}else if(t.is(Token::TT_OPERATOR, "/="))
 			{
 				writeASM("DIVIDE");
 				asmout << OP_DIVIDE;
+				decrementStackSize();
 
 			}else if(!t.is(Token::TT_OPERATOR, "="))
 			{
@@ -1200,11 +1231,14 @@ namespace Scales
 			{
 				writeASM("SOFTPOPREF"); //Pops to reference and leaves the assigned value on the stack
 				asmout << OP_POP_REF_SOFT;
+				decrementStackSize();
 
 			}else
 			{
 				writeASM("POPREF"); // this eliminates the need for a DISCARD in a non-value context, as nothing stays on the stack after assignment here
 				asmout << OP_POP_REF;
+				decrementStackSize();
+				decrementStackSize();
 			}
 
 			//No need to check whether the right hand is void or not, since the right hand is the left hand of another expression, and as such a check is
@@ -1225,6 +1259,7 @@ namespace Scales
 			{
 				writeASM("DISCARD");
 				asmout << OP_DISCARD;
+				decrementStackSize();
 			}
 
 			return leftInfo;
@@ -1262,11 +1297,13 @@ namespace Scales
 			{
 				writeASM("LOGICOR");
 				asmout << OP_LOGIC_OR;
+				decrementStackSize();
 
 			}else if(t.is(Token::TT_OPERATOR,"&"))
 			{
 				writeASM("LOGICAND");
 				asmout << OP_LOGIC_AND;
+				decrementStackSize();
 			}
 
 			t = lexer.peekToken();
@@ -1296,34 +1333,41 @@ namespace Scales
             {
                 writeASM("COMPARE");
                 asmout << OP_COMPARE;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,"<"))
             {
                 writeASM("LESS");
                 asmout << OP_LESS;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,">"))
             {
                 writeASM("GREATER");
                 asmout << OP_GREATER;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,"<="))
             {
                 writeASM("LESSEQUAL");
                 asmout << OP_LESS_EQUAL;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,">="))
             {
                 writeASM("GREATEREQUAL");
                 asmout << OP_GREATER_EQUAL;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,"!="))
             {
                 writeASM("COMPARE");
                 asmout << OP_COMPARE;
+                decrementStackSize();
 
                 writeASM("INVERT");
                 asmout << OP_INVERT;
+                //no change in stack size
             }
 
             t = lexer.peekToken();
@@ -1370,6 +1414,7 @@ namespace Scales
 
                 writeASM("ADD");
                 asmout << OP_ADD;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,"-"))
             {
@@ -1387,6 +1432,7 @@ namespace Scales
 
                 writeASM("SUBTRACT");
                 asmout << OP_SUBTRACT;
+                decrementStackSize();
             }
 
             t = lexer.peekToken();
@@ -1426,11 +1472,13 @@ namespace Scales
             {
                 writeASM("MULTIPLY");
                 asmout << OP_MULTIPLY;
+                decrementStackSize();
 
             }else if(t.is(Token::TT_OPERATOR,"/"))
             {
                 writeASM("DIVIDE");
                 asmout << OP_DIVIDE;
+                decrementStackSize();
             }
 
             t = lexer.peekToken();
@@ -1466,11 +1514,13 @@ namespace Scales
 				asmout << OP_TO_OBJECT;
 				asmout.writeBString(type.getTypeClass()->getID().getNamespace());
 				asmout.writeBString(type.getTypeClass()->getID().getClassname());
+				//no change in stack size
 
 			}else
 			{
 				writeASM(String("TO") + type.getBase());
 				asmout << (OP_TO_INT + type.getBase());
+				//no change in stack size
 			}
 
 			return ExpressionInfo(type, false, ExpressionInfo::FT_MATH_EXPR);
@@ -1513,6 +1563,7 @@ namespace Scales
 
 			writeASM("NEGATE");
 			asmout << OP_NEGATE;
+			//no change in stack size
 		}
 
 		if(invert)
@@ -1524,6 +1575,7 @@ namespace Scales
 
 			writeASM("INVERT");
 			asmout << OP_INVERT;
+			//no change in stack size
 
 			info = ExpressionInfo(DataType(DataType::DTB_INT), info.isConstant(), ExpressionInfo::FT_MATH_EXPR);
 		}
@@ -1591,6 +1643,7 @@ namespace Scales
                 writeASM("GETMEMBER '" + member.getLexem() + "'");
                 asmout << OP_GET_MEMBER;
                 asmout.writeBString(member.getLexem());
+                decrementStackSize();
             }
         }
 
@@ -1624,6 +1677,7 @@ namespace Scales
 
 			writeASM("GETINDEX");
 			asmout << OP_GET_INDEX;
+			decrementStackSize();
 
 			t = lexer.readToken();
 			if(!t.is(Token::TT_OPERATOR, "]"))
@@ -1674,6 +1728,7 @@ namespace Scales
             	error("[COMPILER BUG] Unknown number type", t.getLine());
             	break;
             }
+            incrementStackSize();
 
             return ExpressionInfo(numberType, true, ExpressionInfo::FT_LITERAL);
 
@@ -1682,6 +1737,7 @@ namespace Scales
             writeASM("PUSHSTRING '" + escapeASMChars(t.getLexem()) + "'");
             asmout << OP_PUSH_STRING;
             asmout.writeIString(t.getLexem()); //TODO: Process escape sequences here
+            incrementStackSize();
 
             return ExpressionInfo(DataType(DataType::DTB_STRING), true, ExpressionInfo::FT_LITERAL);
 
@@ -1745,7 +1801,7 @@ namespace Scales
             			asmout.writeBString(secondIdent.getLexem());
             			asmout.writeBString(thirdIdent.getLexem());
             			asmout.writeUByte(paramTypes.size());
-
+            			incrementStackSize();
 
             			return ExpressionInfo(targetFunc->getReturnType(), false, (targetFunc->getReturnType() == DataType::DTB_VOID) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
 
@@ -1768,6 +1824,7 @@ namespace Scales
 						asmout.writeBString(t.getLexem());
 						asmout.writeBString(secondIdent.getLexem());
 						asmout.writeBString(thirdIdent.getLexem());
+						incrementStackSize();
 
 						return ExpressionInfo(targetField->getType(), false, ExpressionInfo::FT_VARIABLE_REF);
             		}
@@ -1793,11 +1850,18 @@ namespace Scales
 						error("Can not call non-static function " + Function::getInfoString(targetClass->getID().toString() + ":" + secondIdent.getLexem(), paramTypes) + " in static context", secondIdent.getLine());
 					}
 
+					//simulate the static runner taking the arguments off the stack
+					decrementStackSize(paramTypes.size());
+
 					asmout << OP_CALL_STATIC;
 					asmout.writeBString("");
 					asmout.writeBString(t.getLexem());
 					asmout.writeBString(secondIdent.getLexem());
 					asmout.writeUByte(paramTypes.size());
+					if(targetFunc->getReturnType().getBase() != DataType::DTB_VOID)
+					{
+						incrementStackSize();
+					}
 
 					return ExpressionInfo(targetFunc->getReturnType(), false, (targetFunc->getReturnType() == DataType::DTB_VOID) ? ExpressionInfo::FT_VOID : ExpressionInfo::FT_FUNCTION_RETURN);
 
@@ -1822,6 +1886,7 @@ namespace Scales
 					writeASM("PUSHREF '" + t.getLexem() + "'");
 					asmout << OP_PUSH_REF;
 					asmout.writeBString(t.getLexem());
+					incrementStackSize();
 
 				}else
 				{
@@ -1837,6 +1902,7 @@ namespace Scales
 						writeASM(String("PUSHLOCALREF ") + l->getIndex());
 						asmout << OP_PUSH_LOCAL_REF;
 						asmout.writeUInt(l->getIndex());
+						incrementStackSize();
 
 					}else
 					{
@@ -1936,6 +2002,7 @@ namespace Scales
 			asmout.writeBString(instClass->getID().getNamespace());
 			asmout.writeBString(instClass->getID().getClassname());
 			asmout.writeUByte(paramCount);
+			incrementStackSize();
 
 			return ExpressionInfo(DataType(DataType::DTB_OBJECT, instClass), false, ExpressionInfo::FT_FUNCTION_RETURN); //Constructors are actually void functions, but the new statement returns the instance, so it is considered as a non-void function call
 
@@ -1943,6 +2010,7 @@ namespace Scales
         {
             writeASM("PUSHNULL");
             asmout << OP_PUSH_NULL;
+            incrementStackSize();
 
             return ExpressionInfo(DataType(DataType::DTB_VOID), true, ExpressionInfo::FT_LITERAL);
 
@@ -1970,6 +2038,7 @@ namespace Scales
 
         		writeASM("PUSHTHIS");
         		asmout << OP_PUSH_THIS;
+        		incrementStackSize();
 
         		return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass), false, ExpressionInfo::FT_LITERAL); //Although "PUSHTHIS" actually creates a reference, returning FT_VARIABLE_REF would allow the program to assign to it
         	}
@@ -1984,6 +2053,7 @@ namespace Scales
 
         	writeASM("PUSHPARENT");
         	asmout << OP_PUSH_PARENT;
+        	incrementStackSize();
 
         	return ExpressionInfo(DataType(DataType::DTB_OBJECT, currentClass->getSuperclass()), false, ExpressionInfo::FT_LITERAL); //Like above, we don't want the typechecker to allow assignments to parent
 
@@ -1992,6 +2062,7 @@ namespace Scales
         	writeASM("PUSHINT 1");
         	asmout << OP_PUSH_INT;
         	asmout.writeInt(1);
+        	incrementStackSize();
 
         	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
 
@@ -2000,6 +2071,7 @@ namespace Scales
         	writeASM("PUSHINT 0");
         	asmout << OP_PUSH_INT;
         	asmout.writeInt(0);
+        	incrementStackSize();
 
         	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
 
@@ -2198,22 +2270,60 @@ namespace Scales
     	return ++lastUID;
     }
 
-    void DefaultCompiler::incrementStackSize(bool global)
+    void DefaultCompiler::incrementStackSize(uint32_t i)
     {
-    	//increment the stack size counter for the unit we are just creating
-		if(global)
+		if(currentFunction != nullptr)
 		{
-			currentClass->setGlobalStackSize(currentClass->getGlobalStackSize() + 1);
+			currentFunctionStackMax += i;
+
+			if(currentFunction->getStackSize() < currentFunctionStackMax)
+			{
+				currentFunction->setStackSize(currentFunctionStackMax);
+			}
 
 		}else
 		{
-			currentFunction->setStackSize(currentFunction->getStackSize() + 1);
+			currentGlobalStackMax++;
+
+			if(currentClass->getGlobalStackSize() < currentGlobalStackMax)
+			{
+				currentClass->setGlobalStackSize(currentGlobalStackMax);
+			}
 		}
     }
 
+    void DefaultCompiler::decrementStackSize(uint32_t i)
+    {
+    	if(currentFunction != nullptr)
+		{
+			if(currentFunctionStackMax >= i)
+			{
+				currentFunctionStackMax -= i;
+
+			}else
+			{
+				currentFunctionStackMax = 0;
+			}
+
+		}else
+		{
+			if(currentGlobalStackMax >= i)
+			{
+				currentGlobalStackMax -= i;
+
+			}else
+			{
+				currentGlobalStackMax = 0;
+			}
+		}
+    }
+
+    //TODO: These functions need error handling
     int32_t DefaultCompiler::parseInt(const String &s)
     {
     	int32_t v = 0;
+
+    	//No need to check for sign, since all numbers in expressions are positive and the sign is an unary operator
 
     	for(uint32_t i = 0; i < s.length(); i++)
     	{

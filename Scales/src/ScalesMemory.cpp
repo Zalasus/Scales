@@ -116,11 +116,11 @@ namespace Scales
 			return SCALES_NEW ValuePrimitive<String>("");
 
 		default:
-			return nullptr;
+			return nullptr; //TODO: better return new ValueNull here
 
 		}
 
-		return nullptr;
+		return nullptr; //same here
 	}
 
 
