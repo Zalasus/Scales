@@ -702,10 +702,12 @@ namespace Scales
 
 
 		Token t = lexer.readToken();
+		uint32_t varIndex = 0;
 
 		if(varFlags & VF_LOCAL)
 		{
 			locals.push_back(Local(ident.getLexem(), type, currentScope, locals.size()));
+			varIndex = locals.back().getIndex();
 
 			// imperative declaration of local
 			writeASM("DECLARELOCAL '" + ident.getLexem() + "'," + (int)type.getBase());
@@ -727,6 +729,8 @@ namespace Scales
 			f->setStatic(varFlags & VF_STATIC);
 			f->setPublic(!(varFlags & VF_PRIVATE));
 			f->setNative(varFlags & VF_NATIVE);
+
+			varIndex = f->getIndex();
 		}
 
 		if(t.is(Token::TT_OPERATOR, "="))
@@ -750,8 +754,17 @@ namespace Scales
 				error("Expected semicolon after variable initialization, but found: " + t.getLexem(), t.getLine());
 			}
 
-			writeASM("POPVAR '" + ident.getLexem() + "'");
-			asmout << OP_POP_VAR;
+			if(varFlags & VF_LOCAL)
+			{
+				writeASM("POPLOCALVAR '" + ident.getLexem() + "'");
+				asmout << OP_POP_LOCAL_VAR;
+				asmout.writeUInt(varIndex);
+			}else
+			{
+				writeASM("POPVAR '" + ident.getLexem() + "'");
+				asmout << OP_POP_VAR;
+				asmout.writeUInt(varIndex);
+			}
 			decrementStackSize();
 
 		}else if(!t.is(Token::TT_OPERATOR, ";"))
@@ -1642,7 +1655,7 @@ namespace Scales
 
                 writeASM("GETMEMBER '" + member.getLexem() + "'");
                 asmout << OP_GET_MEMBER;
-                asmout.writeBString(member.getLexem());
+                asmout.writeUInt(f->getIndex());
                 decrementStackSize();
             }
         }
@@ -1706,28 +1719,7 @@ namespace Scales
 
             writeASM(String("PUSH ") + ((int)numberType.getBase()) + ", " + t.getLexem());
             asmout << OP_PUSH_INT + numberType.getBase();
-            switch(numberType.getBase())
-            {
-            case DataType::DTB_INT:
-            	asmout.writeInt(parseInt(t.getLexem()));
-            	break;
-
-            case DataType::DTB_LONG:
-            	asmout.writeLong(parseLong(t.getLexem()));
-            	break;
-
-            case DataType::DTB_FLOAT:
-            	asmout.writeFloat(parseFloat(t.getLexem()));
-            	break;
-
-            case DataType::DTB_DOUBLE:
-            	asmout.writeDouble(parseDouble(t.getLexem()));
-            	break;
-
-            default:
-            	error("[COMPILER BUG] Unknown number type", t.getLine());
-            	break;
-            }
+            asmout.writeBString(t.getLexem());
             incrementStackSize();
 
             return ExpressionInfo(numberType, true, ExpressionInfo::FT_LITERAL);
@@ -1877,36 +1869,36 @@ namespace Scales
             {
             	DataType fieldType(DataType::DTB_VOID);
 
-            	const Field *f = currentClass->getJoinedField(t.getLexem());
-				if(f != nullptr)
+            	Local *l = lookupLocal(t.getLexem(), expressionScope);
+				if(l != nullptr)
 				{
-					//We found the field in global scope! We've already got it's name, so only extract it's type.
-					fieldType = f->getType();
+					//We found the field in local scope! We've already got it's name, so only extract it's type.
+					fieldType = l->getType();
 
-					writeASM("PUSHREF '" + t.getLexem() + "'");
-					asmout << OP_PUSH_REF;
-					asmout.writeBString(t.getLexem());
+					writeASM(String("PUSHLOCALREF ") + l->getIndex());
+					asmout << OP_PUSH_LOCAL_REF;
+					asmout.writeUInt(l->getIndex());
 					incrementStackSize();
 
 				}else
 				{
-					//Field was not found in global scope. Check for local scope.
+					//Field was not found in local scope. Check for global scope.
 
-					Local *l = lookupLocal(t.getLexem(), expressionScope);
-					if(l != nullptr)
+					const Field *f = currentClass->getJoinedField(t.getLexem());
+					if(f != nullptr)
 					{
 						//there it is. since locals are not accessed by name during runtime, we need to get it's ordinal and push it accordingly
 
-						fieldType = l->getType();
+						fieldType = f->getType();
 
-						writeASM(String("PUSHLOCALREF ") + l->getIndex());
-						asmout << OP_PUSH_LOCAL_REF;
-						asmout.writeUInt(l->getIndex());
+						writeASM(String("PUSHREF ") + f->getIndex());
+						asmout << OP_PUSH_REF;
+						asmout.writeUInt(f->getIndex());
 						incrementStackSize();
 
 					}else
 					{
-						//Also not found in local scope. That's an error
+						//Also not found in global scope. That's an error
 						error("Variable/type '" + t.getLexem() + "' was not declared in this scope", t.getLine());
 					}
 				}
@@ -2061,7 +2053,7 @@ namespace Scales
         {
         	writeASM("PUSHINT 1");
         	asmout << OP_PUSH_INT;
-        	asmout.writeInt(1);
+        	asmout.writeBString("1");
         	incrementStackSize();
 
         	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
@@ -2070,7 +2062,7 @@ namespace Scales
         {
         	writeASM("PUSHINT 0");
         	asmout << OP_PUSH_INT;
-        	asmout.writeInt(0);
+        	asmout.writeBString("0");
         	incrementStackSize();
 
         	return ExpressionInfo(DataType(DataType::DTB_INT), true, ExpressionInfo::FT_LITERAL);
@@ -2316,95 +2308,6 @@ namespace Scales
 				currentGlobalStackMax = 0;
 			}
 		}
-    }
-
-    //TODO: These functions need error handling
-    int32_t DefaultCompiler::parseInt(const String &s)
-    {
-    	int32_t v = 0;
-
-    	//No need to check for sign, since all numbers in expressions are positive and the sign is an unary operator
-
-    	for(uint32_t i = 0; i < s.length(); i++)
-    	{
-    		v += s[i] - '0';
-    		v *= 10;
-    	}
-
-    	return v;
-    }
-
-    int64_t DefaultCompiler::parseLong(const String &s)
-    {
-    	int64_t v = 0;
-
-		for(uint32_t i = 0; i < s.length(); i++)
-		{
-			v += s[i] - '0';
-			v *= 10;
-		}
-
-		return v;
-    }
-
-    float DefaultCompiler::parseFloat(const String &s)
-    {
-    	float v = 0;
-    	bool decimals = false;
-    	float decimalFactor = 0.1f;
-
-		for(uint32_t i = 0; i < s.length(); i++)
-		{
-			if(s[i] == '.')
-			{
-				decimals = true;
-
-			}else
-			{
-				if(decimals)
-				{
-					v += ((double)(s[0] - '0')) * decimalFactor;
-					decimalFactor *= 0.1;
-
-				}else
-				{
-					v += s[i] - '0';
-					v *= 10;
-				}
-			}
-		}
-
-		return v;
-    }
-
-    double DefaultCompiler::parseDouble(const String &s)
-    {
-    	double v = 0;
-		bool decimals = false;
-		double decimalFactor = 0.1f;
-
-		for(uint32_t i = 0; i < s.length(); i++)
-		{
-			if(s[i] == '.')
-			{
-				decimals = true;
-
-			}else
-			{
-				if(decimals)
-				{
-					v += ((double)(s[0] - '0')) * decimalFactor;
-					decimalFactor *= 0.1;
-
-				}else
-				{
-					v += s[i] - '0';
-					v *= 10;
-				}
-			}
-		}
-
-		return v;
     }
 
     void DefaultCompiler::error(const String &s, int line)

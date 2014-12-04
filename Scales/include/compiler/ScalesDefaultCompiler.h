@@ -234,12 +234,6 @@ namespace Scales
         void error(const String &message, int line);
 
 
-        int32_t parseInt(const String &s);
-        int64_t parseLong(const String &s);
-        float parseFloat(const String &s);
-        double parseDouble(const String &s);
-
-
         static const String KEYWORDS[];
         static const uint32_t KEYWORD_COUNT;
 

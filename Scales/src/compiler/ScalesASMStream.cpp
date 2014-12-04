@@ -101,66 +101,17 @@ namespace Scales
 
 	//---------------------------------------------
 
-
 	void ASMStream::writeUByte(uint8_t b)
 	{
 		stream.write(b);
 	}
 
-
-
-	void ASMStream::writeUShort(uint16_t s)
-	{
-		stream.write(s & 0xFF);
-		stream.write((s & 0xFF00) >> 8);
-	}
-
 	void ASMStream::writeUInt(uint32_t i)
 	{
-		stream.write(i & 0xFF);
-		stream.write((i & 0xFF00) >> 8);
-		stream.write((i & 0xFF0000) >> 16);
-		stream.write((i & 0xFF000000) >> 24);
-	}
-
-	void ASMStream::writeLong(int64_t l)
-	{
-		stream.write(l & 0xFF);
-		stream.write((l & 0xFF00) >> 8);
-		stream.write((l & 0xFF0000) >> 16);
-		stream.write((l & 0xFF000000) >> 24);
-		stream.write((l & 0xFF00000000) >> 32);
-		stream.write((l & 0xFF0000000000) >> 40);
-		stream.write((l & 0xFF000000000000) >> 48);
-		stream.write((l & 0xFF00000000000000) >> 56);
-	}
-
-	void ASMStream::writeFloat(float f)
-	{
-		char data[sizeof(f)];
-		for(uint8_t i = 0; i < sizeof(f); i++)
+		for(uint32_t i = 0; i < sizeof(i); i++)
 		{
-			stream.write(data[i]);
-		}
-	}
-
-	void ASMStream::writeDouble(double d)
-	{
-
-	}
-
-	void ASMStream::writeSString(const String &s)
-	{
-		writeUShort(static_cast<uint16_t>(s.length()));
-
-		for(uint32_t i = 0; i < s.length(); i++)
-		{
-			stream.write(static_cast<uint8_t>(s[i]));
-
-			if(i == 0xFFFF)
-			{
-				break;
-			}
+			stream.write(i & 0xFF);
+			i = i >> 8;
 		}
 	}
 

@@ -36,7 +36,7 @@ namespace Scales
 
 		if(value->getValueType() == IValue::VT_REFERENCE)
 		{
-			return *((static_cast<ValueRef*>(value))->getReference());
+			return ((static_cast<ValueRef*>(value))->getReferencedThingy());
 
 		}else
 		{
@@ -228,7 +228,11 @@ namespace Scales
 			{
 				String funcName = readString<uint8_t>();
 				uint8_t paramCount = readIntegral<uint8_t>();
-				functionCall(obj, funcName, paramCount);
+				IValue *ret = functionCall(obj, funcName, paramCount);
+				if(ret != nullptr)
+				{
+					aStackPush(StackElement(ret));
+				}
 				break;
 			}
 
@@ -236,7 +240,11 @@ namespace Scales
 			{
 				String funcName = readString<uint8_t>();
 				uint8_t paramCount = readIntegral<uint8_t>();
-				memberFunctionCall(funcName, paramCount);
+				IValue *ret = memberFunctionCall(funcName, paramCount);
+				if(ret != nullptr)
+				{
+					aStackPush(StackElement(ret));
+				}
 				break;
 			}
 
@@ -330,14 +338,14 @@ namespace Scales
 			case OP_PUSH_REF:
 			{
 				uint32_t globalIndex = readIntegral<uint32_t>();
-				aStackPush(StackElement(SCALES_NEW ValueRef(&(obj->getFieldByIndex(globalIndex))))); //TODO: Look at all these parentheses! Wonderful, isn't it? Like back in my LISP-days...
+				aStackPush(StackElement(SCALES_NEW ValueRef(obj->getFieldByIndex(globalIndex))));
 				break;
 			}
 
 			case OP_PUSH_LOCAL_REF:
 			{
 				uint32_t localIndex = readIntegral<uint32_t>();
-				aStackPush(StackElement(SCALES_NEW ValueRef(&(getLStackElement(localIndex)))));
+				aStackPush(StackElement(SCALES_NEW ValueRef(getLStackElement(localIndex))));
 				break;
 			}
 
@@ -360,7 +368,7 @@ namespace Scales
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access members of non-object type");
 				}
 				ValueObject *iobj = static_cast<ValueObject*>(aStackPeek().getValue());
-				IValue **mref = &(iobj->getObject()->fields[memberIndex]);
+				IValue *&mref = iobj->getObject()->fields[memberIndex];
 				aStackPop().free();
 				aStackPush(StackElement(SCALES_NEW ValueRef(mref)));
 				break;
@@ -469,28 +477,28 @@ namespace Scales
 
 			case OP_PUSH_INT:
 			{
-				int32_t i = readIntegral<int32_t>();
+				int32_t i = parseInteger<int32_t>(readString<uint8_t>());
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int32_t>(i)));
 				break;
 			}
 
 			case OP_PUSH_LONG:
 			{
-				int64_t l = readIntegral<int64_t>();
+				int64_t l = parseInteger<int64_t>(readString<uint8_t>());
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<int64_t>(l)));
 				break;
 			}
 
 			case OP_PUSH_FLOAT:
 			{
-				float f = readFloat();
+				float f = parseFloat<float>(readString<uint8_t>());
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<float>(f)));
 				break;
 			}
 
 			case OP_PUSH_DOUBLE:
 			{
-				double d = readDouble();
+				double d = parseFloat<double>(readString<uint8_t>());
 				aStackPush(StackElement(SCALES_NEW ValuePrimitive<double>(d)));
 				break;
 			}
@@ -520,7 +528,7 @@ namespace Scales
 			{
 				String nspace = readString<uint8_t>();
 				String classname = readString<uint8_t>();
-				uint32_t paramCount = readIntegral<uint32_t>();
+				uint32_t paramCount = readIntegral<uint8_t>();
 				const Class *cl = root->getClass(ClassID(nspace, classname));
 				if(cl == nullptr)
 				{
@@ -532,6 +540,8 @@ namespace Scales
 				break;
 			}
 
+			default:
+				SCALES_EXCEPT(Exception::ET_RUNTIME, "Bad bytecode: Invalid opcode");
 			}
 
 			if(finished)
@@ -697,18 +707,18 @@ namespace Scales
 
 		//TODO: We need to check if source is a reference to the target, and cancel the old-value-deletion if so
 
-		IValue **irefer = (static_cast<ValueRef*>(refer.getRaw()))->getReference(); //we could include this reference-getter in StackElement
+		ValueRef *irefer = static_cast<ValueRef*>(refer.getRaw());
 		IValue *oldValue = refer.getValue();
 
 		if(value.isReference())
 		{
-			(*irefer) = value.getValue()->copy();
+			irefer->getReferencedThingy() = value.getValue()->copy();
 
 			value.free(); //references always need to be deleted
 
 		}else
 		{
-			(*irefer) = value.getRaw();
+			irefer->getReferencedThingy() = value.getRaw();
 
 			//no need to pop/free, as value is re-linked
 		}
@@ -728,8 +738,9 @@ namespace Scales
 	bool Runner::checkCondition()
 	{
 		IValue *iv = aStackPeek().getValue();
+		bool cond = false;
 
-		if(iv->getValueType() != IValue::VT_PRIMITVE || iv->getDataType().isNumeric())
+		if(iv->getValueType() != IValue::VT_PRIMITVE || !iv->getDataType().isNumeric())
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to evaluate condition with non-numeric type");
 		}
@@ -738,30 +749,30 @@ namespace Scales
 		{
 			ValuePrimitive<primitive_int_t> *piv = static_cast< ValuePrimitive<primitive_int_t>* >(iv);
 
-			return piv->getData() != 0;
+			cond = (piv->getData() != 0);
 
 		}else if(iv->getDataType() == DataType::DTB_LONG)
 		{
 			ValuePrimitive<primitive_long_t> *piv = static_cast< ValuePrimitive<primitive_long_t>* >(iv);
 
-			return piv->getData() != 0;
+			cond = (piv->getData() != 0);
 
 		}else if(iv->getDataType() == DataType::DTB_FLOAT)
 		{
 			ValuePrimitive<primitive_float_t> *piv = static_cast< ValuePrimitive<primitive_float_t>* >(iv);
 
-			return piv->getData() != 0;
+			cond = (piv->getData() != 0);
 
 		}else if(iv->getDataType() == DataType::DTB_DOUBLE)
 		{
 			ValuePrimitive<primitive_double_t> *piv = static_cast< ValuePrimitive<primitive_double_t>* >(iv);
 
-			return piv->getData() != 0;
+			cond = (piv->getData() != 0);
 		}
 
 		aStackPop().free();
 
-		return false; //should never happen
+		return cond;
 	}
 
 	template <typename T>
@@ -811,6 +822,74 @@ namespace Scales
 	}
 
 	template <typename T>
+	T Runner::parseInteger(const String &s)
+	{
+		T v = 0;
+		bool negative = false;
+
+		for(uint32_t i = 0; i < s.length(); i++)
+		{
+			if(s[i] == '-')
+			{
+				negative = true;
+
+			}else
+			{
+				v += s[i] - '0';
+				v *= 10;
+			}
+		}
+
+		if(negative)
+		{
+			v = -v;
+		}
+
+		return v;
+	}
+
+	template <typename T>
+	T Runner::parseFloat(const String &s)
+	{
+		T v = 0;
+		bool decimals = false;
+		bool negative = false;
+		float decimalFactor = 0.1f;
+
+		for(uint32_t i = 0; i < s.length(); i++)
+		{
+			if(s[i] == '.')
+			{
+				decimals = true;
+
+			}else if(s[i] == '-')
+			{
+				negative = true;
+
+			}else
+			{
+				if(decimals)
+				{
+					v += ((s[0] - '0')) * decimalFactor;
+					decimalFactor *= 0.1;
+
+				}else
+				{
+					v += s[i] - '0';
+					v *= 10;
+				}
+			}
+		}
+
+		if(negative)
+		{
+			v = -v;
+		}
+
+		return v;
+	}
+
+	template <typename T>
 	T Runner::readIntegral()
 	{
 		ensureProgSize(sizeof(T));
@@ -823,24 +902,6 @@ namespace Scales
 		}
 
 		return v;
-	}
-
-	float Runner::readFloat()
-	{
-		ensureProgSize(sizeof(float));
-
-		pc += sizeof(float);
-
-		return 0;
-	}
-
-	double Runner::readDouble()
-	{
-		ensureProgSize(sizeof(double));
-
-		pc += sizeof(double);
-
-		return 0;
 	}
 
 	template <typename T>

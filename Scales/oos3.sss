@@ -79,22 +79,22 @@ class Main extends App binds Scales_App
 	int i = 1;
 	
 	public string f;
-	
-	private native func void foo();
+
+	public native func void nat();
 
 	public func void main()
 	
-		Util:Integer i = new Integer(); # thanks to the 'using'-statement, the namespace can be ommitted
+		Util:Integer i = new Integer(1); # thanks to the 'using'-statement, the namespace can be ommitted
 		
 		#static calls are not yet supported
 		#System:Out:println("The quick brown fox jumps over the lazy dog");
 	
-		foo();
+		nat();
 	
-		if(i)
+		if(i.getValue())
 		
 		
-		elseif(i+1)
+		elseif(i.getValue()+1)
 		
 		else
 		

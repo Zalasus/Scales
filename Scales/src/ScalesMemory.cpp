@@ -42,20 +42,15 @@ namespace Scales
 	}
 
 
-	ValueRef::ValueRef(IValue **pRef)
+	ValueRef::ValueRef(IValue *&pRef)
 	: ref(pRef)
 	{
-		if(pRef == nullptr)
+		if(ref == nullptr)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to create nullreference");
 		}
 
-		if((*pRef) == nullptr)
-		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to reference nullvalue");
-		}
-
-		if((*pRef)->getValueType() == VT_REFERENCE)
+		if(ref->getValueType() == VT_REFERENCE)
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to cascade references");
 		}
@@ -63,22 +58,22 @@ namespace Scales
 
 	IValue *ValueRef::copy()
 	{
-		if(*ref == nullptr)
+		if(ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
 		}
 
-		return (*ref)->copy();
+		return ref->copy();
 	}
 
 	DataType ValueRef::getDataType()
 	{
-		if(*ref == nullptr)
+		if(ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
 		}
 
-		return (*ref)->getDataType();
+		return ref->getDataType();
 	}
 
 	IValue::value_type_t ValueRef::getValueType()
@@ -86,11 +81,11 @@ namespace Scales
 		return VT_REFERENCE;
 	}
 
-	IValue **ValueRef::getReference()
+	IValue *&ValueRef::getReferencedThingy()
 	{
-		if(*ref == nullptr)
+		if(ref == nullptr)
 		{
-			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access referenced nullvalue");
+			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to access nullreference");
 		}
 
 		return ref;
@@ -116,11 +111,11 @@ namespace Scales
 			return SCALES_NEW ValuePrimitive<String>("");
 
 		default:
-			return nullptr; //TODO: better return new ValueNull here
+			return SCALES_NEW ValueNull();
 
 		}
 
-		return nullptr; //same here
+		return SCALES_NEW ValueNull();
 	}
 
 

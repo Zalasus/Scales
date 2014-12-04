@@ -96,10 +96,13 @@ namespace Scales
 		void ensureProgSize(progAdress_t s);
 
 		template <typename T>
-		T readIntegral();
+		T parseInteger(const String &s);
 
-		float readFloat();
-		double readDouble();
+		template <typename T>
+		T parseFloat(const String &s);
+
+		template <typename T>
+		T readIntegral();
 
 		template <typename T>
 		String readString();

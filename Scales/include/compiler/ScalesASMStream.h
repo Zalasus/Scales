@@ -46,20 +46,10 @@ namespace Scales
 	{
 	public:
 
-		void writeUByte(uint8_t b);
-
-		void writeUShort(uint16_t s);
-
+		void writeUByte(uint8_t i);
 		void writeUInt(uint32_t i);
-		inline void writeInt(int32_t i){ writeUInt(static_cast<uint32_t>(i)); }
-
-		void writeLong(int64_t i);
-
-		void writeFloat(float f);
-		void writeDouble(double d);
 
 		void writeIString(const String &s);
-		void writeSString(const String &s);
 		void writeBString(const String &s);
 
 		void defineMarker(const String &name, uint32_t adress);

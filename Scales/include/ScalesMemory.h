@@ -70,7 +70,7 @@ namespace Scales
 	{
 	public:
 
-		ValueRef(IValue **pRef);
+		ValueRef(IValue *&pRef);
 
 		/**
 		 * Calls the copy method of the referenced value, thus dereferencing it.
@@ -79,11 +79,11 @@ namespace Scales
 		value_type_t getValueType();
 		DataType getDataType();
 
-		IValue **getReference();
+		IValue *&getReferencedThingy();
 
 	private:
 
-		IValue ** const ref;
+		IValue *&ref;
 	};
 
 	class Object;
