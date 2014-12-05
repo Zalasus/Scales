@@ -376,8 +376,7 @@ namespace Scales
 
 			case OP_GET_INDEX:
 			{
-				ensureAStackSize(1);
-				readIntegral<uint32_t>(); //discard the index
+				ensureAStackSize(2);
 				//TODO: further implement array/string access
 				break;
 			}

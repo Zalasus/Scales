@@ -106,12 +106,12 @@ namespace Scales
 		stream.write(b);
 	}
 
-	void ASMStream::writeUInt(uint32_t i)
+	void ASMStream::writeUInt(uint32_t v)
 	{
-		for(uint32_t i = 0; i < sizeof(i); i++)
+		for(uint32_t i = 0; i < sizeof(v); i++)
 		{
-			stream.write(i & 0xFF);
-			i = i >> 8;
+			stream.write(v & 0xFF);
+			v = v >> 8;
 		}
 	}
 
