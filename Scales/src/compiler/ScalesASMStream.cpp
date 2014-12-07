@@ -225,17 +225,4 @@ namespace Scales
 		return *this;
 	}
 
-	ASMStream &ASMStream::operator<<(const String &s)
-	{
-		writeIString(s);
-
-		return *this;
-	}
-
-	ASMStream &ASMStream::operator<<(uint32_t i)
-	{
-		writeUInt(i);
-
-		return *this;
-	}
 }

@@ -43,6 +43,7 @@ namespace Scales
 		bool matches(const String &pName, const TypeList &pParamTypes) const;
 
 		static String getInfoString(const String &pName, const TypeList &paramTypes);
+		static const String CONSTRUCTOR_NAME;
 
 	private:
 

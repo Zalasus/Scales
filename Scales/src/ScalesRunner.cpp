@@ -61,7 +61,12 @@ namespace Scales
 
 	void StackElement::free()
 	{
-		SCALES_DELETE value;
+		if(value != nullptr)
+		{
+			SCALES_DELETE value;
+
+			value = nullptr;
+		}
 	}
 
 	StackElement &StackElement::operator=(const StackElement &e)
@@ -154,13 +159,15 @@ namespace Scales
 			SCALES_DELETE[] lStack;
 		}
 
-
-		for(uint32_t i = 0; i < aStackSize; i++)
+		if(aStack != nullptr)
 		{
-			aStack[i].free();
-		}
+			for(uint32_t i = 0; i < aStackSize; i++)
+			{
+				aStack[i].free();
+			}
 
-		SCALES_DELETE[] aStack;
+			SCALES_DELETE[] aStack;
+		}
 	}
 
 	void Runner::run()
@@ -394,6 +401,8 @@ namespace Scales
 			case OP_GREATER:
 			case OP_LESS_EQUAL:
 			case OP_GREATER_EQUAL:
+				SCALES_EXCEPT(Exception::ET_NOT_IMPLEMENTED, "Math not yet implemented");
+				break;
 
 			case OP_TO_OBJECT:
 			{
@@ -534,7 +543,7 @@ namespace Scales
 					SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to instantiate non-existent class");
 				}
 				Object *o = root->createObject(cl);
-				//TODO: call constructor here
+				functionCall(o, Function::CONSTRUCTOR_NAME, paramCount); // call constructor of newly created object
 				aStackPush(StackElement(SCALES_NEW ValueObject(o)));
 				break;
 			}

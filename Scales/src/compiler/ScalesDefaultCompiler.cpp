@@ -947,9 +947,9 @@ namespace Scales
 
 			//Get the local from stack
 
-			writeASM("POPVAR '" + paraName + "'");
+			writeASM("POPVAR " + locals.back().getIndex());
 			asmout << OP_POP_VAR;
-			asmout.writeBString(paraName);
+			asmout.writeUInt(locals.back().getIndex());
 		}
 
 		BlockInfo binf = block(BlockInfo::BT_FUNC, scopeOfFuncBlock);
@@ -1532,7 +1532,7 @@ namespace Scales
 			}else
 			{
 				writeASM(String("TO") + type.getBase());
-				asmout << (OP_TO_INT + type.getBase());
+				asmout << static_cast<opcode_t>(OP_TO_INT + type.getBase());
 				//no change in stack size
 			}
 
@@ -1718,7 +1718,7 @@ namespace Scales
             }
 
             writeASM(String("PUSH ") + ((int)numberType.getBase()) + ", " + t.getLexem());
-            asmout << OP_PUSH_INT + numberType.getBase();
+            asmout << static_cast<opcode_t>(OP_PUSH_INT + numberType.getBase());
             asmout.writeBString(t.getLexem());
             incrementStackSize();
 

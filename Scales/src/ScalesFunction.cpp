@@ -95,7 +95,7 @@ namespace Scales
 
 	bool Function::isConstructor() const
 	{
-		return name == "init";
+		return name == CONSTRUCTOR_NAME;
 	}
 
 	String Function::getInfoString(const String &pName, const TypeList &pParamTypes)
@@ -115,6 +115,8 @@ namespace Scales
 
 		return result + ")";
 	}
+
+	const String Function::CONSTRUCTOR_NAME = "init";
 
 }
 
