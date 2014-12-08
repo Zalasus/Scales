@@ -69,9 +69,16 @@ namespace Scales
 		}
 	}
 
-	StackElement &StackElement::operator=(const StackElement &e)
+	void StackElement::unmanage()
+	{
+		value = nullptr;
+	}
+
+	StackElement &StackElement::operator=(StackElement &e)
 	{
 		value = e.getRaw();
+
+		e.unmanage();
 
 		return *this;
 	}
@@ -298,7 +305,7 @@ namespace Scales
 				{
 					obj->getFieldByIndex(globalIndex) = aStackPeek().getValue(); //we don't need to copy a pure value on the stack. we just need to re-link the variable to it.
 
-					aStackPop(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack
+					aStackPop().unmanage(); //since we have not copied the stack value, deleting it would result in a bad field. just throw it off the stack, but tell the GC not to delete it
 				}
 
 				SCALES_DELETE oldValue;
@@ -322,7 +329,7 @@ namespace Scales
 				{
 					getLStackElement(localIndex) = aStackPeek().getRaw();
 
-					aStackPop();
+					aStackPop().unmanage();
 				}
 
 				SCALES_DELETE oldVal;
@@ -598,6 +605,7 @@ namespace Scales
 		//Transfer parameters to aStack of new runner
 		for(uint32_t i = 0; i < paramCount; i++)
 		{
+			std::cout << "transfer ";
 			r.aStackPush(aStackPeek()->copy());
 
 			aStackPop().free();
@@ -669,6 +677,8 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack corruption");
 		}
 
+		std::cout << func->getName() <<  " pop (" << aStackTop << " -> " << aStackTop-1 << ")" << std::endl;
+
 		return aStack[--aStackTop];
 	}
 
@@ -689,6 +699,8 @@ namespace Scales
 		{
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Stack overflow");
 		}
+
+		std::cout << func->getName() << " push (" << aStackTop << " -> " << aStackTop+1 << ")" << std::endl;
 
 		aStack[aStackTop++] = e;
 	}
@@ -713,8 +725,6 @@ namespace Scales
 			SCALES_EXCEPT(Exception::ET_RUNTIME, "Tried to assign to value");
 		}
 
-		//TODO: We need to check if source is a reference to the target, and cancel the old-value-deletion if so
-
 		ValueRef *irefer = static_cast<ValueRef*>(refer.getRaw());
 		IValue *oldValue = refer.getValue();
 
@@ -722,13 +732,14 @@ namespace Scales
 		{
 			irefer->getReferencedThingy() = value.getValue()->copy();
 
-			value.free(); //references always need to be deleted
+			value.free(); //references always need to be deleted, as if we would simply re-link, we could delete values that are still in use
 
 		}else
 		{
 			irefer->getReferencedThingy() = value.getRaw();
 
-			//no need to pop/free, as value is re-linked
+			//no need to pop/free, as value is re-linked, but we need to unmanage it so it doesn't get deleted
+			value.unmanage();
 		}
 
 		SCALES_DELETE oldValue;

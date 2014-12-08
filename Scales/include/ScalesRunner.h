@@ -47,12 +47,18 @@ namespace Scales
 		IValue *operator->();
 
 		/**
+		 * Tells the GC not to clean up the pointed value. This is used if data is transferred from one element to another.
+		 * It must be called when a stack value is re-linked.
+		 */
+		void unmanage();
+
+		/**
 		 * Frees the memory pointed by this stack element. The element becomes invalid after this operation.
 		 * Any access to functions of element after calling free() results in undefined behaviour.
 		 */
 		void free();
 
-		StackElement &operator=(const StackElement &e);
+		StackElement &operator=(StackElement &e);
 
 	private:
 
